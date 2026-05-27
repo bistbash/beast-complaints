@@ -1,0 +1,52 @@
+import { formatDateTime, formatRelative } from '../../utils/format.ts';
+import { HISTORY_LABELS } from '../../utils/constants.ts';
+
+interface HistoryRow {
+  id: string;
+  action: string;
+  actor: string;
+  details?: Record<string, unknown>;
+  created_at: string;
+}
+
+interface StatusTimelineProps {
+  history: HistoryRow[];
+  displayNames?: Record<string, string>;
+}
+
+export default function StatusTimeline({ history, displayNames = {} }: StatusTimelineProps) {
+  if (!history.length) {
+    return <p className="muted text-sm">אין רישומי היסטוריה.</p>;
+  }
+  return (
+    <ol className="relative space-y-3 pr-4 pl-1">
+      <div className="absolute right-1 top-1.5 bottom-1.5 w-px bg-neutral-200 dark:bg-neutral-800" aria-hidden />
+      {history.map((h) => {
+        const name = displayNames[h.actor?.toLowerCase()] || h.actor?.split('@')[0] || 'משתמש';
+        const detailsStr = h.details && Object.keys(h.details).length
+          ? Object.entries(h.details)
+              .filter(([_, v]) => v !== null && v !== undefined && v !== '')
+              .map(([k, v]) => `${k}: ${String(v)}`)
+              .join(' · ')
+          : '';
+        return (
+          <li key={h.id} className="relative pr-4">
+            <span
+              className="absolute right-[-3px] top-2 h-2 w-2 rounded-full bg-indigo-500"
+              aria-hidden
+            />
+            <div className="text-sm">
+              <span className="font-medium">{HISTORY_LABELS[h.action] || h.action}</span>
+              <span className="muted"> · </span>
+              <span className="muted">{name}</span>
+            </div>
+            {detailsStr && <p className="muted text-xs mt-0.5">{detailsStr}</p>}
+            <time className="muted text-xs" title={formatDateTime(h.created_at)}>
+              {formatRelative(h.created_at)}
+            </time>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

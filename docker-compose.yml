@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    container_name: beast-complaints
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3050}:3050"
+    environment:
+      - NODE_ENV=production
+      - PORT=3050
+
+      # Beast
+      - BEAST_PORTAL_URL=${BEAST_PORTAL_URL}
+      - APP_ID=${APP_ID:-beast-complaints}
+      - APP_URL=${APP_URL}
+      - BEAST_API_KEY=${BEAST_API_KEY:-}
+      - BEAST_SECRET_KEY=${BEAST_SECRET_KEY:-}
+
+      # PostgreSQL (db-smart)
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-db_smart}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+      # Inquiry dataset + permissions
+      - COMPLAINTS_DATASET_ID=${COMPLAINTS_DATASET_ID}
+      - ADMIN_GROUP=${ADMIN_GROUP:-tichnun}
+      - NAVIGATOR_ROLE_KEY=${NAVIGATOR_ROLE_KEY:-naat_pniot_lakoach}
+      - TARGET_GROUPS=${TARGET_GROUPS:-}

@@ -1,0 +1,11 @@
+node_modules
+public/dist
+dist
+.env
+.env.local
+.git
+.gitignore
+.idea
+.vscode
+*.log
+README.md
