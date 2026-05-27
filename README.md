@@ -167,7 +167,8 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | GET    | `/api/inquiries/:id`                      | פנייה + messages + history                     | מורשה (visibility-checked) |
 | POST   | `/api/inquiries/:id/route`                | ניתוב (group + assignedUser + routeToManager)  | navigator / admin / keva |
 | POST   | `/api/inquiries/:id/team-response`        | התייחסות צוות → awaiting_manager               | assignee / keva / navigator / admin |
-| POST   | `/api/inquiries/:id/manager-response`     | התייחסות מנהל → closed + מייל סגירה            | manager       |
+| POST   | `/api/inquiries/:id/manager-response`     | התייחסות מנהל + הצדקה → closed + מייל סגירה    | manager       |
+| POST   | `/api/inquiries/:id/justification`        | קביעת הצדקה (justified / unjustified) רטרואקטיבית | manager     |
 | POST   | `/api/inquiries/:id/reopen`               | פתיחה מחדש                                     | manager / admin |
 | POST   | `/api/inquiries/:id/priority`             | שינוי דחיפות                                   | router / manager |
 | POST   | `/api/inquiries/:id/messages`             | תגובה בשיח הפנימי                              | מורשה (visibility-checked) |
@@ -175,6 +176,19 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | GET    | `/api/inquiries/lookup/groups`            | רשימת קבוצות + manageable למשתמש               | כל מחובר      |
 | GET    | `/api/inquiries/lookup/members?group=X`   | חברי קבוצה                                     | כל מחובר      |
 | GET    | `/api/inquiries/lookup/managers`          | רשימת המנהלים (admin group + role keys)        | כל מחובר      |
+
+---
+
+## ייבוא נתונים
+
+יש שני סקריפטים לייבוא חד-פעמי לתוך ה-dataset הקיים. שניהם הם idempotent — אפשר להריץ שוב.
+
+| סקריפט                                                              | מקור                                                  | מה הוא עושה                                                                                                                                                          |
+|---------------------------------------------------------------------|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `npm run import-inquiries -- data/sheets.tsv`                       | Excel/TSV של ה-Google Form (14 עמודות ה-sheet)        | מסנכרן עמודות sheet בלבד (timestamp, email, full_name...). שורות חדשות מקבלות workflow ברירת מחדל (`status='new'`).                                                  |
+| `npm run import-legacy-db -- data/legacy.tsv`                       | Export של complaints-manager הקודם (עם JSON columns)   | ממלא workflow data של שורות קיימות: status, assigned_group/user, team_response, manager_response, justification, closed_at, וגם מייבא את message thread.             |
+
+הסקריפטים מתאימים שורות לפי `(timestamp, email)`. ה-legacy script ממיר ISO UTC → "DD/MM/YYYY HH:MM:SS" באזור זמן Asia/Jerusalem כדי להתאים לפורמט של db-smart sync. כל סקריפט תומך ב-`--dry-run` להצגת תוצאות ללא כתיבה.
 
 ---
 

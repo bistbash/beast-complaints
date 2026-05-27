@@ -90,7 +90,8 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
       ADD COLUMN IF NOT EXISTS closed_at             timestamptz,
       ADD COLUMN IF NOT EXISTS last_activity_at      timestamptz DEFAULT NOW(),
       ADD COLUMN IF NOT EXISTS due_at                timestamptz DEFAULT (NOW() + INTERVAL '72 hours'),
-      ADD COLUMN IF NOT EXISTS closing_email_sent_at timestamptz
+      ADD COLUMN IF NOT EXISTS closing_email_sent_at timestamptz,
+      ADD COLUMN IF NOT EXISTS legacy_id             text
   `);
 
   // Defensive backfill (Postgres should fill DEFAULTs on ADD COLUMN, but just in case):
@@ -133,5 +134,9 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
   await pool.query(
     `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${safeBase}_assigned_idx`.slice(0, 63))}
        ON ${t} (assigned_group, assigned_user)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS ${quoteIdent(`${safeBase}_legacy_idx`.slice(0, 63))}
+       ON ${t} (legacy_id)`,
   );
 }
