@@ -2,6 +2,7 @@ import type {
   InquiryStatus,
   InquiryPriority,
   InquiryCategory,
+  JustificationDecision,
   MessageType,
   HistoryAction,
 } from './constants.ts';
@@ -75,6 +76,10 @@ export interface InquiryRow {
   manager_response: string | null;
   manager_response_at: string | null;
   manager_response_by: string | null;
+  /** Manager's verdict — required before closing a new inquiry. NULL for legacy rows. */
+  justification: JustificationDecision | null;
+  justification_at: string | null;
+  justification_by: string | null;
 
   closed_at: string | null;
   last_activity_at: string;

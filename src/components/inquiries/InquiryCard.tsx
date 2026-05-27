@@ -3,7 +3,13 @@ import StatusPill from '../ui/StatusPill.tsx';
 import PriorityPill from '../ui/PriorityPill.tsx';
 import Avatar from '../ui/Avatar.tsx';
 import { computeUrgency, formatRelative } from '../../utils/format.ts';
-import { groupLabel, type InquiryStatus, type InquiryPriority } from '../../utils/constants.ts';
+import {
+  groupLabel,
+  JUSTIFICATION_META,
+  type InquiryStatus,
+  type InquiryPriority,
+  type JustificationDecision,
+} from '../../utils/constants.ts';
 
 export interface InquirySummary {
   inquiry_id: string;
@@ -24,6 +30,7 @@ export interface InquirySummary {
   assigned_user: string | null;
   last_activity_at: string;
   due_at: string | null;
+  justification?: JustificationDecision | null;
 }
 
 interface InquiryCardProps {
@@ -64,6 +71,18 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
             </span>
           )}
           {inquiry.category && <span className="pill pill-neutral">{inquiry.category}</span>}
+          {inquiry.justification && (
+            <span
+              className={
+                JUSTIFICATION_META[inquiry.justification].tone === 'warning'
+                  ? 'pill border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+                  : 'pill pill-neutral'
+              }
+              title={JUSTIFICATION_META[inquiry.justification].description}
+            >
+              {JUSTIFICATION_META[inquiry.justification].label}
+            </span>
+          )}
         </div>
 
         <footer className="mt-4 flex items-center justify-between gap-3 border-t border-subtle pt-3 text-xs">

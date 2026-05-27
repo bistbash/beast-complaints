@@ -89,10 +89,34 @@ export const HISTORY_LABELS: Record<string, string> = {
   priority_changed: 'הדחיפות עודכנה',
   team_response_submitted: 'נכתבה התייחסות צוות',
   manager_response_submitted: 'נכתבה התייחסות מנהל',
+  justification_set: 'נקבעה הצדקת הפנייה',
   closed: 'הפנייה נסגרה',
   reopened: 'הפנייה נפתחה מחדש',
   comment_added: 'נוספה תגובה',
   closing_email_sent: 'נשלח מייל סיום',
+};
+
+export const JUSTIFICATION = {
+  JUSTIFIED: 'justified',
+  UNJUSTIFIED: 'unjustified',
+} as const;
+
+export type JustificationDecision = (typeof JUSTIFICATION)[keyof typeof JUSTIFICATION];
+
+export const JUSTIFICATION_META: Record<
+  JustificationDecision,
+  { label: string; tone: 'warning' | 'neutral'; description: string }
+> = {
+  justified: {
+    label: 'מוצדקת',
+    tone: 'warning',
+    description: 'הפנייה נמצאה מוצדקת — יש לנקוט פעולה / לטפל בנושא.',
+  },
+  unjustified: {
+    label: 'לא מוצדקת',
+    tone: 'neutral',
+    description: 'לאחר בחינה, לא נדרשת פעולה ביחס לפנייה זו.',
+  },
 };
 
 export const RELATION_OPTIONS = [

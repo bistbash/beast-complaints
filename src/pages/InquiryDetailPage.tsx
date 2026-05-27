@@ -16,9 +16,12 @@ import { formatDateTime, formatRelative, computeUrgency } from '../utils/format.
 import {
   STATUS,
   PRIORITY_META,
+  JUSTIFICATION,
+  JUSTIFICATION_META,
   groupLabel,
   type InquiryStatus,
   type InquiryPriority,
+  type JustificationDecision,
 } from '../utils/constants.ts';
 
 interface InquiryFull {
@@ -54,6 +57,9 @@ interface InquiryFull {
   manager_response: string | null;
   manager_response_at: string | null;
   manager_response_by: string | null;
+  justification: JustificationDecision | null;
+  justification_at: string | null;
+  justification_by: string | null;
 
   closed_at: string | null;
   closing_email_sent_at: string | null;
@@ -94,6 +100,7 @@ export default function InquiryDetailPage() {
   const [showRouting, setShowRouting] = useState(false);
   const [teamDraft, setTeamDraft] = useState('');
   const [managerDraft, setManagerDraft] = useState('');
+  const [managerVerdict, setManagerVerdict] = useState<JustificationDecision | null>(null);
 
   const refresh = useCallback(async () => {
     if (!id) return;
@@ -138,11 +145,26 @@ export default function InquiryDetailPage() {
   }
 
   async function submitManagerResponse() {
-    if (!id || !managerDraft.trim()) return;
+    if (!id || !managerDraft.trim() || !managerVerdict) return;
     setActing(true);
     try {
-      await api.post(`/api/inquiries/${id}/manager-response`, { content: managerDraft.trim() });
+      await api.post(`/api/inquiries/${id}/manager-response`, {
+        content: managerDraft.trim(),
+        justification: managerVerdict,
+      });
       setManagerDraft('');
+      setManagerVerdict(null);
+      await refresh();
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function setJustification(verdict: JustificationDecision) {
+    if (!id) return;
+    setActing(true);
+    try {
+      await api.post(`/api/inquiries/${id}/justification`, { justification: verdict });
       await refresh();
     } finally {
       setActing(false);
@@ -286,8 +308,13 @@ export default function InquiryDetailPage() {
           {/* === Manager Response section === */}
           {(canWriteManagerResponse || inquiry.manager_response) && (
             <Card>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">התייחסות מנהל / החלטה סופית</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold">התייחסות מנהל / החלטה סופית</h2>
+                  {inquiry.justification && (
+                    <JustificationPill decision={inquiry.justification} />
+                  )}
+                </div>
                 {inquiry.manager_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.manager_response_at)} ע"י{' '}
@@ -318,13 +345,35 @@ export default function InquiryDetailPage() {
                 <p className="muted mt-2 text-sm">ממתינה להתייחסות מנהל.</p>
               )}
 
+              {/* Retroactive verdict — only for closed/manager-responded rows that
+                  predate the justification field, when the current user is a manager. */}
+              {inquiry.manager_response && !inquiry.justification && capabilities?.isManager && (
+                <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50/60 p-3 text-xs dark:border-amber-800 dark:bg-amber-950/20">
+                  <p className="mb-2 font-semibold">לפנייה זו טרם נקבעה החלטה (מוצדקת / לא מוצדקת).</p>
+                  <p className="muted mb-3">סמן עכשיו כדי להשלים את התיעוד:</p>
+                  <VerdictRadioGroup
+                    value={null}
+                    onChange={(v) => setJustification(v)}
+                    disabled={acting}
+                  />
+                </div>
+              )}
+
               {canWriteManagerResponse && !inquiry.manager_response && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-3">
                   {inquiry.team_response && (
                     <div className="muted rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900/40">
                       הצוות כתב התייחסות — קרא אותה לפני שכותב/ת את ההחלטה הסופית.
                     </div>
                   )}
+                  <div>
+                    <label className="field-label">החלטה <span className="text-rose-600">*</span></label>
+                    <VerdictRadioGroup
+                      value={managerVerdict}
+                      onChange={setManagerVerdict}
+                      disabled={acting}
+                    />
+                  </div>
                   <textarea
                     className="textarea"
                     value={managerDraft}
@@ -333,13 +382,17 @@ export default function InquiryDetailPage() {
                     rows={6}
                   />
                   <div className="flex items-center justify-between gap-2">
-                    <p className="muted text-xs">לאחר שליחה, הפנייה תיסגר ויישלח מייל לפונה.</p>
+                    <p className="muted text-xs">
+                      {!managerVerdict
+                        ? 'יש לבחור אם הפנייה מוצדקת או לא מוצדקת לפני הסגירה.'
+                        : 'לאחר שליחה, הפנייה תיסגר ויישלח מייל לפונה.'}
+                    </p>
                     <Button
                       variant="primary"
                       size="sm"
                       onClick={submitManagerResponse}
                       loading={acting}
-                      disabled={!managerDraft.trim()}
+                      disabled={!managerDraft.trim() || !managerVerdict}
                     >
                       סיים וסגור פנייה
                     </Button>
@@ -502,6 +555,68 @@ export default function InquiryDetailPage() {
         capabilities={capabilities}
         onRouted={refresh}
       />
+    </div>
+  );
+}
+
+function JustificationPill({ decision }: { decision: JustificationDecision }) {
+  const meta = JUSTIFICATION_META[decision];
+  const cls =
+    meta.tone === 'warning'
+      ? 'border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200'
+      : 'border border-neutral-300 bg-neutral-100 text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`} title={meta.description}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {meta.label}
+    </span>
+  );
+}
+
+function VerdictRadioGroup({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: JustificationDecision | null;
+  onChange: (v: JustificationDecision) => void;
+  disabled?: boolean;
+}) {
+  const options: JustificationDecision[] = [JUSTIFICATION.JUSTIFIED, JUSTIFICATION.UNJUSTIFIED];
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {options.map((opt) => {
+        const meta = JUSTIFICATION_META[opt];
+        const selected = value === opt;
+        const baseCls =
+          'flex flex-col items-start gap-1 rounded-xl border p-3 text-right transition focus:outline-none disabled:opacity-50';
+        const stateCls = selected
+          ? meta.tone === 'warning'
+            ? 'border-amber-400 bg-amber-50 shadow-sm dark:border-amber-600 dark:bg-amber-950/40'
+            : 'border-neutral-500 bg-neutral-100 shadow-sm dark:border-neutral-400 dark:bg-neutral-800'
+          : 'border-subtle hover:border-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/40';
+        return (
+          <button
+            key={opt}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(opt)}
+            className={`${baseCls} ${stateCls}`}
+            aria-pressed={selected}
+          >
+            <div className="flex w-full items-center justify-between">
+              <span className="text-sm font-semibold">{meta.label}</span>
+              <span
+                className={`h-4 w-4 rounded-full border-2 ${
+                  selected ? 'border-current bg-current' : 'border-neutral-400'
+                }`}
+                aria-hidden="true"
+              />
+            </div>
+            <p className="muted text-[11px] leading-snug">{meta.description}</p>
+          </button>
+        );
+      })}
     </div>
   );
 }

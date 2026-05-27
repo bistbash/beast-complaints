@@ -106,6 +106,7 @@ export const HISTORY_ACTION = {
   PRIORITY_CHANGED: 'priority_changed',
   TEAM_RESPONSE_SUBMITTED: 'team_response_submitted',
   MANAGER_RESPONSE_SUBMITTED: 'manager_response_submitted',
+  JUSTIFICATION_SET: 'justification_set',
   CLOSED: 'closed',
   REOPENED: 'reopened',
   COMMENT_ADDED: 'comment_added',
@@ -123,3 +124,20 @@ export const DEFAULT_MANAGER_ROLE_KEYS = ['madr'];
 
 /** Group that grants "super team member" — sees all teams, but routes only within own teams. */
 export const DEFAULT_KEVA_GROUP = 'keva';
+
+/**
+ * Manager's final judgment on the inquiry — required before closing.
+ * `justified` means the complaint is valid (an issue exists / will be addressed).
+ * `unjustified` means after review, no action is warranted.
+ */
+export const JUSTIFICATION = {
+  JUSTIFIED: 'justified',
+  UNJUSTIFIED: 'unjustified',
+} as const;
+
+export type JustificationDecision = (typeof JUSTIFICATION)[keyof typeof JUSTIFICATION];
+
+export const JUSTIFICATION_LABEL_HE: Record<JustificationDecision, string> = {
+  justified: 'מוצדקת',
+  unjustified: 'לא מוצדקת',
+};

@@ -6,9 +6,11 @@ import {
   PRIORITY_SLA_HOURS,
   HISTORY_ACTION,
   MESSAGE_TYPE,
+  JUSTIFICATION,
   type InquiryStatus,
   type InquiryPriority,
   type HistoryAction,
+  type JustificationDecision,
 } from '../lib/constants.ts';
 import type { DatasetMeta, InquiryRow, MessageRow, HistoryRow } from '../lib/types.ts';
 
@@ -69,6 +71,9 @@ const INQUIRY_SELECT = `
   manager_response,
   manager_response_at,
   manager_response_by,
+  justification,
+  justification_at,
+  justification_by,
   closed_at,
   closing_email_sent_at,
   last_activity_at,
@@ -182,6 +187,9 @@ const WRITABLE_COLUMNS = new Set([
   'manager_response',
   'manager_response_at',
   'manager_response_by',
+  'justification',
+  'justification_at',
+  'justification_by',
   'closed_at',
   'closing_email_sent_at',
   'last_activity_at',
@@ -288,22 +296,52 @@ export async function submitManagerResponse(
   meta: DatasetMeta,
   inquiryId: string,
   content: string,
+  justification: JustificationDecision,
   actorEmail: string,
   actorName: string | null,
 ): Promise<InquiryRow | null> {
   const trimmed = content.trim();
   if (!trimmed) return getInquiry(meta, inquiryId);
+  if (justification !== JUSTIFICATION.JUSTIFIED && justification !== JUSTIFICATION.UNJUSTIFIED) {
+    throw new Error('justification must be "justified" or "unjustified"');
+  }
   const now = new Date().toISOString();
   const updated = await patchInquiry(meta, inquiryId, {
     status: STATUS.CLOSED,
     manager_response: trimmed,
     manager_response_at: now,
     manager_response_by: actorEmail,
+    justification,
+    justification_at: now,
+    justification_by: actorEmail,
     closed_at: now,
   });
-  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.MANAGER_RESPONSE_SUBMITTED, {});
-  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.CLOSED, {});
+  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.MANAGER_RESPONSE_SUBMITTED, { justification });
+  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.CLOSED, { justification });
   await postMessage(pool, inquiryId, actorEmail, actorName, trimmed, MESSAGE_TYPE.MANAGER_RESPONSE);
+  return updated;
+}
+
+/**
+ * Set or change the justification on an inquiry — used for legacy rows that
+ * were closed before this field existed, or to correct a manager's decision.
+ */
+export async function setJustification(
+  meta: DatasetMeta,
+  inquiryId: string,
+  justification: JustificationDecision,
+  actorEmail: string,
+): Promise<InquiryRow | null> {
+  if (justification !== JUSTIFICATION.JUSTIFIED && justification !== JUSTIFICATION.UNJUSTIFIED) {
+    throw new Error('justification must be "justified" or "unjustified"');
+  }
+  const now = new Date().toISOString();
+  const updated = await patchInquiry(meta, inquiryId, {
+    justification,
+    justification_at: now,
+    justification_by: actorEmail,
+  });
+  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.JUSTIFICATION_SET, { justification });
   return updated;
 }
 

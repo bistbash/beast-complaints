@@ -25,6 +25,7 @@ import {
   logHistory,
   submitTeamResponse,
   submitManagerResponse,
+  setJustification,
   markClosingEmailSent,
 } from '../services/inquiries.ts';
 import {
@@ -32,9 +33,11 @@ import {
   PRIORITY,
   HISTORY_ACTION,
   MESSAGE_TYPE,
+  JUSTIFICATION,
   DEFAULT_MANAGER_ROLE_KEYS,
   type InquiryStatus,
   type InquiryPriority,
+  type JustificationDecision,
 } from '../lib/constants.ts';
 import { notifyGroup, sendNotification } from '../services/notifications.ts';
 import {
@@ -418,12 +421,23 @@ router.post('/:id/manager-response', async (req, res, next) => {
       res.status(409).json({ error: `לא ניתן לכתוב התייחסות מנהל בסטטוס "${inquiry.status}"` });
       return;
     }
-    const { content } = req.body || {};
+    const { content, justification } = req.body || {};
     if (!content?.trim()) {
       res.status(400).json({ error: 'נדרש תוכן ההתייחסות' });
       return;
     }
-    const updated = await submitManagerResponse(meta, req.params.id, content, caps.email, caps.displayName);
+    if (justification !== JUSTIFICATION.JUSTIFIED && justification !== JUSTIFICATION.UNJUSTIFIED) {
+      res.status(400).json({ error: 'יש להחליט אם הפנייה מוצדקת או לא מוצדקת לפני סגירה' });
+      return;
+    }
+    const updated = await submitManagerResponse(
+      meta,
+      req.params.id,
+      content,
+      justification as JustificationDecision,
+      caps.email,
+      caps.displayName,
+    );
 
     // Send closing email — placeholder for now. Mark as "sent" so we don't double-send.
     if (updated) {
@@ -440,6 +454,34 @@ router.post('/:id/manager-response', async (req, res, next) => {
       })();
     }
 
+    res.json({ inquiry: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/justification', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const meta = await requireDataset();
+    const caps = buildCapabilities(req.user);
+    if (!caps.isManager) {
+      res.status(403).json({ error: 'רק מנהל יכול להחליט אם פנייה מוצדקת' });
+      return;
+    }
+    const { justification } = req.body || {};
+    if (justification !== JUSTIFICATION.JUSTIFIED && justification !== JUSTIFICATION.UNJUSTIFIED) {
+      res.status(400).json({ error: 'justification חייב להיות "justified" או "unjustified"' });
+      return;
+    }
+    const updated = await setJustification(meta, req.params.id, justification, caps.email);
+    if (!updated) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
+    }
     res.json({ inquiry: updated });
   } catch (err) {
     next(err);
