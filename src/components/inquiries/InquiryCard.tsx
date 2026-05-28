@@ -44,7 +44,7 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
     urgency === 'critical' ? 'urgency-critical' : urgency === 'warning' ? 'urgency-warning' : '';
 
   const assigneeName = inquiry.assigned_user
-    ? displayNames[inquiry.assigned_user.toLowerCase()] || 'Display Name'
+    ? displayNames[inquiry.assigned_user.toLowerCase()] || inquiry.assigned_user
     : null;
 
   return (

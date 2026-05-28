@@ -26,6 +26,7 @@ interface InboxPageProps {
 export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
   const isClosed = view === 'closed';
   const [items, setItems] = useState<InquirySummary[]>([]);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [groups, setGroups] = useState<string[]>([]);
@@ -88,11 +89,13 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       .then((res) => {
         if (cancelled) return;
         setItems(res.data?.inquiries || []);
+        setDisplayNames(res.data?.displayNames || {});
       })
       .catch((err) => {
         if (cancelled) return;
         setError(err.response?.data?.error || 'טעינת פניות נכשלה');
         setItems([]);
+        setDisplayNames({});
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -291,7 +294,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       {!loading && !error && items.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {items.map((inquiry) => (
-            <InquiryCard key={inquiry.inquiry_id} inquiry={inquiry} />
+            <InquiryCard key={inquiry.inquiry_id} inquiry={inquiry} displayNames={displayNames} />
           ))}
         </div>
       )}

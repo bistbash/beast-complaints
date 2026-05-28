@@ -236,7 +236,11 @@ router.get('/', async (req, res, next) => {
     }
 
     const result = await listInquiries(meta, filter);
-    res.json({ inquiries: result.rows, pagination: result.pagination });
+    const actorEmails = Array.from(
+      new Set(result.rows.map((r) => r.assigned_user).filter((v): v is string => !!v)),
+    );
+    const names = actorEmails.length ? await resolveNames(actorEmails) : {};
+    res.json({ inquiries: result.rows, pagination: result.pagination, displayNames: names });
   } catch (err) {
     next(err);
   }
