@@ -49,7 +49,7 @@ interface BeastConversationsResponse {
 function normalizeConversation(c: NonNullable<BeastConversationsResponse['conversations']>[number]): ChatConversation {
   return {
     username: c.username,
-    displayName: c.displayName || c.display_name || c.username,
+    displayName: c.displayName || c.display_name || 'Display Name',
     email: c.email ?? null,
     lastMessage: c.lastMessage || c.last_message || '',
     lastMessageAt: c.lastMessageAt || c.last_message_at || null,
@@ -166,7 +166,7 @@ export default function useBeastChat(enabled: boolean): UseBeastChat {
         const res = await beastApi().get<BeastUsersResponse>('/api/chat/users');
         const list: DirectoryUser[] = (res.data?.users || []).map((u) => ({
           username: u.username,
-          displayName: u.displayName || u.display_name || u.username,
+          displayName: u.displayName || u.display_name || 'Display Name',
           email: u.email ?? null,
           isOnline: u.is_online ?? false,
           lastSeen: u.last_seen ?? null,

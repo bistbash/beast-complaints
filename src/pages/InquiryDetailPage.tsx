@@ -266,8 +266,7 @@ export default function InquiryDetailPage() {
                 {inquiry.team_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.team_response_at)} ע"י{' '}
-                    {displayNames[inquiry.team_response_by?.toLowerCase() || ''] ||
-                      inquiry.team_response_by?.split('@')[0]}
+                    {displayNames[inquiry.team_response_by?.toLowerCase() || ''] || 'Display Name'}
                   </span>
                 )}
               </div>
@@ -318,8 +317,7 @@ export default function InquiryDetailPage() {
                 {inquiry.manager_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.manager_response_at)} ע"י{' '}
-                    {displayNames[inquiry.manager_response_by?.toLowerCase() || ''] ||
-                      inquiry.manager_response_by?.split('@')[0]}
+                    {displayNames[inquiry.manager_response_by?.toLowerCase() || ''] || 'Display Name'}
                   </span>
                 )}
               </div>
@@ -492,7 +490,7 @@ export default function InquiryDetailPage() {
                 <dt className="muted">מטפל</dt>
                 <dd className="font-medium">
                   {inquiry.assigned_user
-                    ? displayNames[inquiry.assigned_user.toLowerCase()] || inquiry.assigned_user
+                    ? displayNames[inquiry.assigned_user.toLowerCase()] || 'Display Name'
                     : '—'}
                 </dd>
               </div>

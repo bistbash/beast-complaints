@@ -58,6 +58,11 @@ function normalize(value: string): string {
   return String(value || '').trim().toLowerCase();
 }
 
+function canonicalGroup(value: string): string {
+  const v = normalize(value);
+  return v === 'teachers' ? 'morim' : v;
+}
+
 function adminGroupName(): string {
   return normalize(process.env.ADMIN_GROUP || 'tichnun');
 }
@@ -78,8 +83,20 @@ function kevaGroupName(): string {
 
 export function targetGroups(): string[] {
   const env = (process.env.TARGET_GROUPS || '').trim();
-  if (env) return env.split(',').map((s) => s.trim()).filter(Boolean);
-  return DEFAULT_TARGET_GROUPS.map((g) => g.key);
+  const raw = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_TARGET_GROUPS.map((g) => g.key);
+  const canonical = raw.map(canonicalGroup);
+  if (!canonical.includes('morim')) canonical.push('morim');
+  // Keep order stable while removing aliases/duplicates (e.g. teachers -> morim).
+  return Array.from(new Set(canonical));
+}
+
+function userGroupsWithTeachersFallback(user: BeastUser): string[] {
+  const groups = (user.groups || []).map(canonicalGroup);
+  const targets = targetGroups();
+  const nonTeacherTargets = targets.filter((g) => g !== 'morim');
+  const belongsToOtherTarget = groups.some((g) => nonTeacherTargets.includes(g));
+  if (!belongsToOtherTarget) groups.push('morim');
+  return Array.from(new Set(groups));
 }
 
 export function isAdmin(user: BeastUser): boolean {
@@ -115,16 +132,18 @@ export function isKeva(user: BeastUser): boolean {
  */
 export function manageableGroups(user: BeastUser): string[] {
   const targets = targetGroups().map(normalize);
+  const userGroups = userGroupsWithTeachersFallback(user);
   if (isNavigator(user) || isAdmin(user)) {
     return targets;
   }
   if (isKeva(user)) {
-    return configKeysForUserGroups(user.groups || [], targets);
+    return configKeysForUserGroups(userGroups, targets);
   }
   return [];
 }
 
 export function buildCapabilities(user: BeastUser): UserCapabilities {
+  const effectiveGroups = userGroupsWithTeachersFallback(user);
   const admin = isAdmin(user);
   const navigator = isNavigator(user);
   const manager = isManager(user);
@@ -135,10 +154,10 @@ export function buildCapabilities(user: BeastUser): UserCapabilities {
     isNavigator: navigator,
     isManager: manager,
     isKeva: keva,
-    groups: user.groups || [],
+    groups: effectiveGroups,
     manageableGroups: manageable,
     email: user.email || `${user.username}@local`,
-    displayName: user.displayName || user.username,
+    displayName: user.displayName || 'Display Name',
     username: user.username,
     canRoute: navigator || admin || keva,
     canViewAll: navigator || admin || manager || keva,

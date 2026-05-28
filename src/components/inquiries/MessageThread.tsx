@@ -67,7 +67,7 @@ export default function MessageThread({
       )}
       {messages.map((m) => {
         const isMine = currentUserEmail && m.author?.toLowerCase() === currentUserEmail.toLowerCase();
-        const name = m.author_name || displayNames[m.author?.toLowerCase()] || m.author?.split('@')[0] || 'משתמש';
+        const name = m.author_name || displayNames[m.author?.toLowerCase()] || 'Display Name';
         return (
           <div
             key={m.id}

@@ -92,10 +92,12 @@ router.get('/lookup/groups', (req, res) => {
 router.get('/lookup/members', async (req, res, next) => {
   try {
     const group = String(req.query.group || '').trim();
-    if (!group) {
-      res.json({ members: [] });
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+    const caps = buildCapabilities(user);
     if (!process.env.BEAST_API_KEY) {
       res.json({
         members: [],
@@ -104,20 +106,70 @@ router.get('/lookup/members', async (req, res, next) => {
       });
       return;
     }
-    const members = await listGroupMembers(group);
+
     const managerRoles = (process.env.MANAGER_ROLE_KEYS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     const wantedManagerRoles = managerRoles.length ? managerRoles : DEFAULT_MANAGER_ROLE_KEYS.map((s) => s.toLowerCase());
     const adminGroup = (process.env.ADMIN_GROUP || 'tichnun').toLowerCase();
-    res.json({
-      members: members.map((m) => ({
-        username: m.username,
-        email: m.email,
-        displayName: m.displayName,
-        isManager:
-          m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
-          (m.roles || []).some((r) => wantedManagerRoles.includes(r.toLowerCase())),
+
+    if (group) {
+      const members = await listGroupMembers(group);
+      res.json({
+        members: members.map((m) => ({
+          username: m.username,
+          email: m.email,
+          displayName: m.displayName || 'Display Name',
+          suggestedGroup: group,
+          isManager:
+            m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
+            (m.roles || []).some((r) => wantedManagerRoles.includes(r.toLowerCase())),
+        })),
+      });
+      return;
+    }
+
+    const manageable = caps.manageableGroups || [];
+    if (!manageable.length) {
+      res.json({ members: [] });
+      return;
+    }
+
+    const byUser = new Map<
+      string,
+      {
+        username: string;
+        email: string | null;
+        displayName: string;
+        isManager: boolean;
+        suggestedGroup: string | null;
+      }
+    >();
+
+    const grouped = await Promise.all(
+      manageable.map(async (g) => ({
+        group: g,
+        members: await listGroupMembers(g),
       })),
-    });
+    );
+
+    for (const entry of grouped) {
+      for (const m of entry.members) {
+        const key = (m.email || m.username || '').toLowerCase();
+        if (!key) continue;
+        if (!byUser.has(key)) {
+          byUser.set(key, {
+            username: m.username,
+            email: m.email,
+            displayName: m.displayName || 'Display Name',
+            suggestedGroup: entry.group,
+            isManager:
+              m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
+              (m.roles || []).some((r) => wantedManagerRoles.includes(r.toLowerCase())),
+          });
+        }
+      }
+    }
+
+    res.json({ members: Array.from(byUser.values()) });
   } catch (err) {
     next(err);
   }
@@ -134,7 +186,7 @@ router.get('/lookup/managers', async (_req, res, next) => {
       managers: managers.map((m) => ({
         username: m.username,
         email: m.email,
-        displayName: m.displayName,
+        displayName: m.displayName || 'Display Name',
       })),
     });
   } catch (err) {
@@ -260,6 +312,7 @@ router.post('/:id/route', async (req, res, next) => {
     // pick the first eligible group from the user's membership.
     let finalGroup: string = group;
     let finalAssignedUser: string | null = assignedUser || null;
+    let finalAssignedUserLabel: string | null = null;
     let finalRouteToManager: boolean = !!routeToManager;
 
     if (finalAssignedUser && !finalGroup) {
@@ -268,14 +321,20 @@ router.post('/:id/route', async (req, res, next) => {
         res.status(400).json({ error: 'משתמש לא נמצא ב-AD' });
         return;
       }
-      const candidates = u.groups.map((g) => g.toLowerCase());
+      const candidates = u.groups.map((g) => g.toLowerCase() === 'teachers' ? 'morim' : g.toLowerCase());
       const allowed = caps.manageableGroups.map((g) => g.toLowerCase());
-      const match = candidates.find((g) => allowed.includes(g));
+      const hasNonTeacherGroup = candidates.some((g) => g !== 'morim' && allowed.includes(g));
+      const virtualTeacherCandidate = !hasNonTeacherGroup && allowed.includes('morim') ? 'morim' : null;
+      const match = candidates.find((g) => allowed.includes(g)) || virtualTeacherCandidate;
       if (!match) {
         res.status(403).json({ error: 'המשתמש שבחרת אינו חבר בקבוצה שאתה מורשה לנתב אליה' });
         return;
       }
       finalGroup = match;
+      finalAssignedUserLabel = u.displayName || 'Display Name';
+    } else if (finalAssignedUser) {
+      const u = await findUser(finalAssignedUser);
+      finalAssignedUserLabel = u?.displayName || 'Display Name';
     }
 
     if (!finalGroup) {
@@ -312,6 +371,7 @@ router.post('/:id/route', async (req, res, next) => {
     const updated = await routeInquiry(meta, req.params.id, {
       group: finalGroup,
       assignedUser: finalAssignedUser,
+      assignedUserLabel: finalAssignedUserLabel,
       routedBy: caps.email,
       routeToManager: finalRouteToManager,
     });

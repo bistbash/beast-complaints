@@ -1,5 +1,5 @@
 import { formatDateTime, formatRelative } from '../../utils/format.ts';
-import { HISTORY_LABELS } from '../../utils/constants.ts';
+import { HISTORY_LABELS, groupLabel } from '../../utils/constants.ts';
 
 interface HistoryRow {
   id: string;
@@ -22,11 +22,29 @@ export default function StatusTimeline({ history, displayNames = {} }: StatusTim
     <ol className="relative space-y-3 pr-4 pl-1">
       <div className="absolute right-1 top-1.5 bottom-1.5 w-px bg-neutral-200 dark:bg-neutral-800" aria-hidden />
       {history.map((h) => {
-        const name = displayNames[h.actor?.toLowerCase()] || h.actor?.split('@')[0] || 'משתמש';
+        const name = displayNames[h.actor?.toLowerCase()] || 'Display Name';
         const detailsStr = h.details && Object.keys(h.details).length
           ? Object.entries(h.details)
               .filter(([_, v]) => v !== null && v !== undefined && v !== '')
-              .map(([k, v]) => `${k}: ${String(v)}`)
+              .map(([k, v]) => {
+                const label =
+                  k === 'from_group'
+                    ? 'מקבוצה'
+                    : k === 'to_group'
+                      ? 'לקבוצה'
+                      : k === 'assigned_user'
+                        ? 'מטפל'
+                        : k === 'route_to_manager'
+                          ? 'ישירות למנהל'
+                          : k;
+                const value =
+                  k === 'from_group' || k === 'to_group'
+                    ? groupLabel(String(v))
+                    : k === 'assigned_user'
+                      ? displayNames[String(v).toLowerCase()] || 'Display Name'
+                      : String(v);
+                return `${label}: ${value}`;
+              })
               .join(' · ')
           : '';
         return (

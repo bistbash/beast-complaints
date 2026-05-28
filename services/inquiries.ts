@@ -7,6 +7,7 @@ import {
   HISTORY_ACTION,
   MESSAGE_TYPE,
   JUSTIFICATION,
+  DEFAULT_TARGET_GROUPS,
   type InquiryStatus,
   type InquiryPriority,
   type HistoryAction,
@@ -83,6 +84,15 @@ const INQUIRY_SELECT = `
 function computeDueAt(priority: InquiryPriority, createdAt: Date): Date {
   const hours = PRIORITY_SLA_HOURS[priority] ?? PRIORITY_SLA_HOURS.medium;
   return new Date(createdAt.getTime() + hours * 60 * 60 * 1000);
+}
+
+function groupLabelHe(group: string | null | undefined): string {
+  if (!group) return '—';
+  const normalized = group.toLowerCase() === 'teachers' ? 'morim' : group.toLowerCase();
+  const match = DEFAULT_TARGET_GROUPS.find((g) => g.key.toLowerCase() === normalized);
+  if (match) return match.label;
+  if (normalized === 'morim') return 'מורים';
+  return group;
 }
 
 interface ListInquiriesQuery {
@@ -222,6 +232,7 @@ async function patchInquiry(
 export interface RouteInquiryInput {
   group: string;
   assignedUser: string | null;
+  assignedUserLabel?: string | null;
   routedBy: string;
   /** When true, status jumps to awaiting_manager (skips team response). */
   routeToManager: boolean;
@@ -262,10 +273,10 @@ export async function routeInquiry(
     input.routedBy,
     null,
     input.routeToManager
-      ? `הפנייה נותבה ישירות למנהל (קבוצה: ${input.group}${input.assignedUser ? `, מטפל: ${input.assignedUser}` : ''}).`
+      ? `הפנייה נותבה ישירות למנהל (קבוצה: ${groupLabelHe(input.group)}${input.assignedUser ? `, מטפל: ${input.assignedUserLabel || 'Display Name'}` : ''}).`
       : input.assignedUser
-        ? `הפנייה נותבה לקבוצה "${input.group}" ושויכה ל-${input.assignedUser}.`
-        : `הפנייה נותבה לקבוצה "${input.group}".`,
+        ? `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}" ושויכה ל-${input.assignedUserLabel || 'Display Name'}.`
+        : `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}".`,
     MESSAGE_TYPE.ROUTING,
   );
   return updated;

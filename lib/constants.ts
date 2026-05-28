@@ -84,6 +84,7 @@ export const DEFAULT_TARGET_GROUPS: { key: string; label: string }[] = [
   { key: 'tichnun', label: 'תפעול הדרכה' },
   { key: 'minhala', label: 'מנהלה' },
   { key: 'mechonot', label: 'מכונות' },
+  { key: 'morim', label: 'מורים' },
 ];
 
 export const MESSAGE_TYPE = {

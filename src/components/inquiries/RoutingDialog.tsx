@@ -9,6 +9,7 @@ interface Member {
   username: string;
   email: string | null;
   displayName: string | null;
+  suggestedGroup?: string | null;
   isManager?: boolean;
 }
 
@@ -43,6 +44,8 @@ export default function RoutingDialog({
   const [membersWarning, setMembersWarning] = useState<string | null>(null);
   const [managers, setManagers] = useState<Manager[]>([]);
   const [assignedUser, setAssignedUser] = useState('');
+  const [assignedUserQuery, setAssignedUserQuery] = useState('');
+  const [groupQuery, setGroupQuery] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +56,9 @@ export default function RoutingDialog({
     if (!open) return;
     setMode('team');
     setGroup(currentGroup || (allowedGroups.length === 1 ? allowedGroups[0] : ''));
+    setGroupQuery(currentGroup ? groupLabel(currentGroup) : allowedGroups.length === 1 ? groupLabel(allowedGroups[0]) : '');
     setAssignedUser('');
+    setAssignedUserQuery('');
     setError(null);
   }, [open, currentGroup, allowedGroups]);
 
@@ -66,14 +71,10 @@ export default function RoutingDialog({
   }, [mode]);
 
   useEffect(() => {
-    if (!group) {
-      setMembers([]);
-      setMembersWarning(null);
-      return;
-    }
     let cancelled = false;
+    const params = group ? { group } : undefined;
     api
-      .get('/api/inquiries/lookup/members', { params: { group } })
+      .get('/api/inquiries/lookup/members', params ? { params } : undefined)
       .then((res) => {
         if (cancelled) return;
         setMembers(res.data?.members || []);
@@ -87,7 +88,44 @@ export default function RoutingDialog({
     return () => {
       cancelled = true;
     };
-  }, [group]);
+  }, [group, mode]);
+
+  function normalizeText(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function memberValue(m: Member): string {
+    const name = m.displayName || 'Display Name';
+    const identity = m.email || `${m.username}@local`;
+    return `${name} (${identity})`;
+  }
+
+  function onGroupInput(value: string) {
+    setGroupQuery(value);
+    const v = normalizeText(value);
+    const match = allowedGroups.find((g) => normalizeText(g) === v || normalizeText(groupLabel(g)) === v);
+    setGroup(match || '');
+    if (!match) {
+      setAssignedUser('');
+      setAssignedUserQuery('');
+    }
+  }
+
+  function onMemberInput(value: string) {
+    setAssignedUserQuery(value);
+    const v = normalizeText(value);
+    const match = members.find((m) => normalizeText(memberValue(m)) === v);
+    if (!match) {
+      setAssignedUser('');
+      return;
+    }
+    const identity = match.email || `${match.username}@local`;
+    setAssignedUser(identity);
+    if (!group && match.suggestedGroup) {
+      setGroup(match.suggestedGroup);
+      setGroupQuery(groupLabel(match.suggestedGroup));
+    }
+  }
 
   async function submit() {
     setError(null);
@@ -167,14 +205,18 @@ export default function RoutingDialog({
           <>
             <div>
               <label className="field-label">קבוצה יעד {capabilities?.isKeva && '(רק קבוצות שאתה חבר בהן)'}</label>
-              <select className="select" value={group} onChange={(e) => setGroup(e.target.value)}>
-                <option value="">— בחר קבוצה —</option>
+              <input
+                list="routing-group-options"
+                className="input"
+                value={groupQuery}
+                onChange={(e) => onGroupInput(e.target.value)}
+                placeholder="התחל להקליד קבוצה…"
+              />
+              <datalist id="routing-group-options">
                 {allowedGroups.map((g) => (
-                  <option key={g} value={g}>
-                    {groupLabel(g)}
-                  </option>
+                  <option key={g} value={groupLabel(g)} />
                 ))}
-              </select>
+              </datalist>
               {!allowedGroups.length && (
                 <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
                   אין לך הרשאה לנתב לקבוצות. צור קשר עם המנהל.
@@ -183,31 +225,31 @@ export default function RoutingDialog({
             </div>
             <div>
               <label className="field-label">חבר צוות (אופציונלי)</label>
-              <select
-                className="select"
-                value={assignedUser}
-                onChange={(e) => setAssignedUser(e.target.value)}
-                disabled={!group}
-              >
-                <option value="">— ללא שיוך אישי —</option>
+              <input
+                list="routing-member-options"
+                className="input"
+                value={assignedUserQuery}
+                onChange={(e) => onMemberInput(e.target.value)}
+                placeholder={group ? 'התחל להקליד חבר צוות…' : 'התחל להקליד חבר צוות מכל הקבוצות…'}
+              />
+              <datalist id="routing-member-options">
                 {members.map((m) => (
-                  <option key={m.username} value={m.email || `${m.username}@local`}>
-                    {m.displayName || m.username}
-                    {m.isManager ? ' (מנהל)' : ''}
-                  </option>
+                  <option key={m.email || m.username} value={memberValue(m)} />
                 ))}
-              </select>
+              </datalist>
               {membersWarning ? (
                 <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                   {membersWarning}
                 </p>
-              ) : group && members.length === 0 ? (
+              ) : members.length === 0 ? (
                 <p className="mt-1 text-xs text-neutral-500">
-                  לא נמצאו חברי צוות בקבוצה זו ב-AD.
+                  {group ? 'לא נמצאו חברי צוות בקבוצה זו ב-AD.' : 'לא נמצאו משתמשים זמינים לניתוב.'}
                 </p>
               ) : (
                 <p className="field-hint">
-                  ללא שיוך — כל הצוות יראה את הפנייה. בחירת חבר ספציפי תשייך לטיפול אישי.
+                  {group
+                    ? 'ללא שיוך — כל הצוות יראה את הפנייה. בחירת חבר ספציפי תשייך לטיפול אישי.'
+                    : 'אפשר לבחור משתמש גם בלי לבחור קבוצה — הקבוצה תיבחר אוטומטית לפי המשתמש שנבחר.'}
                 </p>
               )}
             </div>
@@ -221,7 +263,7 @@ export default function RoutingDialog({
               <option value="">— בחר מנהל —</option>
               {managers.map((m) => (
                 <option key={m.username} value={m.email || `${m.username}@local`}>
-                  {m.displayName || m.username}
+                  {m.displayName || 'Display Name'}
                 </option>
               ))}
             </select>

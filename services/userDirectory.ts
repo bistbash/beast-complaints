@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { groupsMatch } from '../lib/groupKeys.ts';
+import { DEFAULT_TARGET_GROUPS } from '../lib/constants.ts';
 
 /**
  * Lightweight Beast directory client — resolves emails / usernames to display
@@ -70,6 +71,24 @@ async function getCachedDirectory(): Promise<DirectoryUser[]> {
   return users;
 }
 
+function normalizeGroup(value: string): string {
+  const v = String(value || '').trim().toLowerCase();
+  return v === 'teachers' ? 'morim' : v;
+}
+
+function configuredTargetGroups(): string[] {
+  const env = (process.env.TARGET_GROUPS || '').trim();
+  const raw = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_TARGET_GROUPS.map((g) => g.key);
+  return Array.from(new Set(raw.map(normalizeGroup)));
+}
+
+function belongsToTeacherVirtualGroup(user: DirectoryUser): boolean {
+  const nonTeacherTargets = configuredTargetGroups().filter((g) => g !== 'morim');
+  if (nonTeacherTargets.length === 0) return true;
+  const userGroups = (user.groups || []).map(normalizeGroup);
+  return !userGroups.some((g) => nonTeacherTargets.includes(g));
+}
+
 export async function resolveNames(identifiers: string[]): Promise<Record<string, string>> {
   const unique = Array.from(new Set(identifiers.filter(Boolean).map((s) => s.toLowerCase())));
   if (!unique.length) return {};
@@ -82,13 +101,17 @@ export async function resolveNames(identifiers: string[]): Promise<Record<string
         x.username?.toLowerCase() === id ||
         `${x.username}@local`.toLowerCase() === id,
     );
-    if (u) result[id] = u.displayName || u.username;
+    if (u) result[id] = u.displayName || 'Display Name';
   }
   return result;
 }
 
 export async function listGroupMembers(group: string): Promise<DirectoryUser[]> {
   const users = await getCachedDirectory();
+  const wanted = normalizeGroup(group);
+  if (wanted === 'morim') {
+    return users.filter((u) => belongsToTeacherVirtualGroup(u));
+  }
   return users.filter((u) => u.groups.some((g) => groupsMatch(group, g)));
 }
 

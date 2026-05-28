@@ -6,11 +6,12 @@
  */
 
 export function normalizeGroupToken(name: string): string {
-  return String(name || '')
+  const normalized = String(name || '')
     .trim()
     .toLowerCase()
     .replace(/_/g, ' ')
     .replace(/\s+/g, ' ');
+  return normalized === 'teachers' ? 'morim' : normalized;
 }
 
 /** True if config key and AD group name refer to the same team. */

@@ -62,11 +62,13 @@ export const GROUP_LABELS: Record<string, string> = {
   mechonot: 'מכונות',
   keva: 'קבע',
   morim: 'מורים',
+  teachers: 'מורים',
 };
 
 export function groupLabel(key: string | null | undefined): string {
   if (!key) return '—';
-  return GROUP_LABELS[key.toLowerCase()] || key;
+  const normalized = key.toLowerCase() === 'teachers' ? 'morim' : key.toLowerCase();
+  return GROUP_LABELS[normalized] || key;
 }
 
 export const MESSAGE_TYPE = {
