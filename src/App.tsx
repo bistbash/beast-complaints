@@ -9,7 +9,6 @@ import InboxPage from './pages/InboxPage.tsx';
 import InquiryDetailPage from './pages/InquiryDetailPage.tsx';
 import ClosedInquiriesPage from './pages/ClosedInquiriesPage.tsx';
 import StatsPage from './pages/StatsPage.tsx';
-import LegacyImportPage from './pages/LegacyImportPage.tsx';
 import ChatWidget from './components/chat/ChatWidget.tsx';
 
 export default function App() {
@@ -35,7 +34,6 @@ export default function App() {
           <Route path="/inquiries/:id" element={<InquiryDetailPage />} />
           <Route path="/closed" element={<ClosedInquiriesPage />} />
           <Route path="/stats" element={<StatsPage />} />
-          <Route path="/admin/legacy-import" element={<LegacyImportPage />} />
           {/* Backwards-compat: old direct links → scope chips. */}
           <Route path="/mine" element={<Navigate to="/inbox?scope=mine_assigned" replace />} />
           <Route path="/routing" element={<Navigate to="/inbox?scope=unrouted" replace />} />
