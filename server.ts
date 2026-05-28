@@ -19,12 +19,14 @@ const [
   { testConnection, pool },
   { default: authRoutes },
   { default: inquiriesRoutes },
+  { default: adminRoutes },
   { ensureSchema, ensureInquiryWorkflowColumns },
   { loadDatasetMeta },
 ] = await Promise.all([
   import('./config/db.ts'),
   import('./routes/auth.ts'),
   import('./routes/inquiries.ts'),
+  import('./routes/admin.ts'),
   import('./lib/schema.ts'),
   import('./services/datasetMeta.ts'),
 ]);
@@ -34,7 +36,10 @@ const PORT = parseInt(process.env.PORT || '3050', 10);
 const datasetId = process.env.COMPLAINTS_DATASET_ID || '';
 
 app.use(cors());
-app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  const limit = req.path.startsWith('/api/admin') ? '15mb' : '2mb';
+  express.json({ limit })(req, res, next);
+});
 
 app.use((req, _res, next) => {
   if (process.env.NODE_ENV !== 'production') {
@@ -57,6 +62,7 @@ app.get('/health', async (_req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/inquiries', inquiriesRoutes);
+app.use('/api/admin', adminRoutes);
 
 const distIndexPath = path.join(__dirname, 'public', 'dist', 'index.html');
 if (fs.existsSync(distIndexPath)) {
