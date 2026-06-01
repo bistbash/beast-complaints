@@ -163,6 +163,7 @@ export function buildCapabilities(user: BeastUser): UserCapabilities {
     canViewAll: navigator || admin || manager || keva,
     canWriteTeamResponse: true, // gated per-inquiry (must be the assigned_user OR keva/admin)
     canWriteManagerResponse: manager,
+    canManageEmail: admin,
   };
 }
 

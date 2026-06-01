@@ -33,7 +33,7 @@
             │ מנהל כותב manager_response
             ▼
        ┌────────┐ status = closed
-       │ נסגרה  │ → מייל סיום נשלח לפונה (placeholder)
+       │ נסגרה  │ → מייל סיום נשלח לפונה (Gmail API)
        └────────┘
 ```
 
@@ -176,6 +176,51 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | GET    | `/api/inquiries/lookup/groups`            | רשימת קבוצות + manageable למשתמש               | כל מחובר      |
 | GET    | `/api/inquiries/lookup/members?group=X`   | חברי קבוצה                                     | כל מחובר      |
 | GET    | `/api/inquiries/lookup/managers`          | רשימת המנהלים (admin group + role keys)        | כל מחובר      |
+| GET    | `/api/settings/email`                     | סטטוס חיבור Gmail + הגדרות Google              | admin (תפעול הדרכה) |
+| PUT    | `/api/settings/email/credentials`         | שמירת Client ID/Secret, מפתח הצפנה, redirect   | admin           |
+| GET    | `/api/settings/email/templates`           | תבניות מכתב סגירה + רשימת משתנים              | admin           |
+| PUT    | `/api/settings/email/templates/:kind`     | שמירת תבנית (`justified` / `unjustified`)      | admin           |
+| POST   | `/api/settings/email/templates/preview`   | תצוגה מקדימה עם נתוני דוגמה                    | admin           |
+| GET    | `/api/settings/email/oauth/start`         | URL להתחברות Google OAuth                      | admin           |
+| GET    | `/api/settings/email/oauth/callback`      | callback מ-Google (redirect ל-/settings)       | — (signed state) |
+| DELETE | `/api/settings/email`                     | ניתוק חשבון Gmail                              | admin           |
+| POST   | `/api/settings/email/test`                | מייל בדיקה למנהל המחובר                        | admin           |
+
+---
+
+## חיבור Gmail (מייל סגירה לפונים)
+
+משתמשי **מנהל מערכת** (`ADMIN_GROUP`, ברירת מחדל `tichnun` — תפעול הדרכה) רואים טאב **ניהול**. שם מגדירים את פרטי Google OAuth (Client ID/Secret, מפתח הצפנה) ומחברים חשבון Gmail **משותף** אחד — **ללא עריכת `.env`**. לאחר סגירת פנייה (`manager-response`), המערכת שולחת מייל סיכום ל-`submitter_email` דרך Gmail API. `closing_email_sent_at` מתעדכן רק אם השליחה הצליחה.
+
+### הקמת Google Cloud (פעם אחת)
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → פרויקט חדש.
+2. **APIs & Services** → Enable **Gmail API**.
+3. **OAuth consent screen** — Internal (Workspace) או External + Test users לפיתוח.
+4. **Credentials** → Create **OAuth client ID** → Web application.
+5. **Authorized redirect URIs** (חייב להתאים לשרת, לא ל-Vite) — העתיקו מהטקסט בטאב ניהול:
+   - פיתוח: `http://localhost:3050/api/settings/email/oauth/callback`
+   - production: `https://<host-של-השרת>/api/settings/email/oauth/callback`
+6. בטאב **ניהול**: תחת **הגדרות Google OAuth** (מתקפל) — Client ID, Secret, מפתח הצפנה, **שמור**, **התחבר עם Google**.
+7. תחת **מכתבי סגירה** — העלו **נכסים** (לוגו, חתימה) והשתמשו ב-HTML עם משתנים כמו `{{submitter_name}}` או `{{asset_logo}}` בתוך `<img src="...">`. תבנית נפרדת לפנייה מוצדקת / לא מוצדקת.
+
+### משתני סביבה (אופציונלי)
+
+ניתן להגדיר גם ב-`.env` כ-fallback; עדיפות לערכים שנשמרו ב-UI (PostgreSQL).
+
+| משתנה | תיאור |
+|--------|--------|
+| `APP_URL` | כתובת ה-UI (למשל `http://localhost:5180`) — redirect אחרי OAuth |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `EMAIL_TOKEN_ENCRYPTION_KEY` | fallback בלבד |
+
+### פתרון תקלות Gmail
+
+| תופעה | פתרון |
+|--------|--------|
+| `redirect_uri_mismatch` | ה-URI ב-Google Console חייב להיות זהה לזה שמוצג בטאב ניהול (פורט השרת 3050, לא Vite). |
+| `missing_refresh_token` | נתקו ב-Google Account → חיבור מחדש; OAuth משתמש ב-`prompt=consent`. |
+| מייל סגירה לא נשלח | ודאו שמירת הגדרות Google + חיבור Gmail בטאב ניהול. |
+| שינוי מפתח הצפנה נכשל | נתקו קודם את חשבון Gmail, שנהו מפתח, שמרו, והתחברו מחדש. |
 
 ---
 
@@ -194,7 +239,6 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 
 ## TODO / לא ממומש עדיין
 
-- [ ] **שליחת מייל סיום**: בקובץ `routes/inquiries.ts` בנתיב `manager-response` יש placeholder ל-`console.info` במקום שליחת מייל אמיתית. צריך להחליף ל-SMTP/Sendgrid/Beast email service. ה-`closing_email_sent_at` מתעדכן כשהמשלוח מצליח.
 - [ ] **תזכורות SLA**: cron שמדגיש פניות שעוברות את ה-`due_at`.
 - [ ] **קוד split** של ה-bundle (כרגע ~545kB → ~152kB gzip).
 
@@ -210,3 +254,4 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | חבר keva רואה רק את הפניות שלו                         | ודא שהוא ב-AD group ששמו זהה ל-`KEVA_GROUP` ב-`.env` (`keva` כברירת מחדל).                         |
 | מנהל לא יכול לכתוב התייחסות                            | ודא שהוא ב-`ADMIN_GROUP` *או* יש לו role מתוך `MANAGER_ROLE_KEYS`.                                  |
 | 429 על הטופס הציבורי                                   | rate limit 10/min לכל IP. אם נדרש לשנות, ערוך `routes/public.ts`.                                   |
+| מייל סגירה לא נשלח לפונה                              | בטאב **ניהול**: שמרו הגדרות Google והתחברו ל-Gmail.                                                |

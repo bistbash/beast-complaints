@@ -15,6 +15,7 @@ export interface Capabilities {
   canViewAll: boolean;
   canWriteTeamResponse: boolean;
   canWriteManagerResponse: boolean;
+  canManageEmail: boolean;
 }
 
 let cache: { value: Capabilities | null; promise: Promise<Capabilities | null> | null } = {

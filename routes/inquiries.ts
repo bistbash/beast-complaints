@@ -40,11 +40,13 @@ import {
   type JustificationDecision,
 } from '../lib/constants.ts';
 import { notifyGroup, sendNotification } from '../services/notifications.ts';
+import { sendClosingEmail } from '../services/closingEmail.ts';
 import {
   listGroupMembers,
   listManagers,
   resolveNames,
   findUser,
+  fetchProfileAvatars,
 } from '../services/userDirectory.ts';
 import { quoteIdent } from '../lib/quoteIdent.ts';
 
@@ -89,6 +91,20 @@ router.get('/lookup/groups', (req, res) => {
   });
 });
 
+async function enrichMembersWithAvatars<T extends { username: string }>(
+  members: T[],
+  token: string | undefined,
+): Promise<Array<T & { avatarUrl: string | null }>> {
+  const avatarMap = await fetchProfileAvatars(
+    members.map((m) => m.username).filter(Boolean),
+    token,
+  );
+  return members.map((m) => ({
+    ...m,
+    avatarUrl: avatarMap[m.username] || null,
+  }));
+}
+
 router.get('/lookup/members', async (req, res, next) => {
   try {
     const group = String(req.query.group || '').trim();
@@ -113,11 +129,13 @@ router.get('/lookup/members', async (req, res, next) => {
 
     if (group) {
       const members = await listGroupMembers(group);
+      const enriched = await enrichMembersWithAvatars(members, req.beastToken);
       res.json({
-        members: members.map((m) => ({
+        members: enriched.map((m) => ({
           username: m.username,
           email: m.email,
-          displayName: m.displayName || 'Display Name',
+          displayName: m.displayName || m.username,
+          avatarUrl: m.avatarUrl,
           suggestedGroup: group,
           isManager:
             m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
@@ -159,7 +177,7 @@ router.get('/lookup/members', async (req, res, next) => {
           byUser.set(key, {
             username: m.username,
             email: m.email,
-            displayName: m.displayName || 'Display Name',
+            displayName: m.displayName || m.username,
             suggestedGroup: entry.group,
             isManager:
               m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
@@ -169,24 +187,37 @@ router.get('/lookup/members', async (req, res, next) => {
       }
     }
 
-    res.json({ members: Array.from(byUser.values()) });
+    const list = Array.from(byUser.values());
+    const enriched = await enrichMembersWithAvatars(list, req.beastToken);
+    res.json({
+      members: enriched.map((m) => ({
+        username: m.username,
+        email: m.email,
+        displayName: m.displayName,
+        avatarUrl: m.avatarUrl,
+        suggestedGroup: m.suggestedGroup,
+        isManager: m.isManager,
+      })),
+    });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/lookup/managers', async (_req, res, next) => {
+router.get('/lookup/managers', async (req, res, next) => {
   try {
     const adminGroup = process.env.ADMIN_GROUP || 'tichnun';
     const roleKeys = (process.env.MANAGER_ROLE_KEYS || '').trim()
       ? (process.env.MANAGER_ROLE_KEYS as string).split(',').map((s) => s.trim())
       : DEFAULT_MANAGER_ROLE_KEYS;
     const managers = await listManagers({ adminGroup, roleKeys });
+    const enriched = await enrichMembersWithAvatars(managers, req.beastToken);
     res.json({
-      managers: managers.map((m) => ({
+      managers: enriched.map((m) => ({
         username: m.username,
         email: m.email,
-        displayName: m.displayName || 'Display Name',
+        displayName: m.displayName || m.username,
+        avatarUrl: m.avatarUrl,
       })),
     });
   } catch (err) {
@@ -503,17 +534,13 @@ router.post('/:id/manager-response', async (req, res, next) => {
       caps.displayName,
     );
 
-    // Send closing email — placeholder for now. Mark as "sent" so we don't double-send.
     if (updated) {
       void (async () => {
-        try {
-          // TODO: integrate real email transport (SMTP / Beast email / Sendgrid).
-          console.info(
-            `[beast-complaints] closing email TODO — to=${updated.submitter_email} subject="${updated.subject}" inquiry=${updated.inquiry_id}`,
-          );
+        const result = await sendClosingEmail(updated);
+        if (result.ok) {
           await markClosingEmailSent(meta, updated.inquiry_id);
-        } catch (e) {
-          console.warn('[beast-complaints] closing email failed:', e instanceof Error ? e.message : e);
+        } else {
+          console.warn('[beast-complaints] closing email skipped:', result.reason);
         }
       })();
     }

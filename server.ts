@@ -19,12 +19,14 @@ const [
   { testConnection, pool },
   { default: authRoutes },
   { default: inquiriesRoutes },
+  { default: settingsRoutes },
   { ensureSchema, ensureInquiryWorkflowColumns },
   { loadDatasetMeta },
 ] = await Promise.all([
   import('./config/db.ts'),
   import('./routes/auth.ts'),
   import('./routes/inquiries.ts'),
+  import('./routes/settings.ts'),
   import('./lib/schema.ts'),
   import('./services/datasetMeta.ts'),
 ]);
@@ -57,6 +59,7 @@ app.get('/health', async (_req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/inquiries', inquiriesRoutes);
+app.use('/api/settings', settingsRoutes);
 
 const distIndexPath = path.join(__dirname, 'public', 'dist', 'index.html');
 if (fs.existsSync(distIndexPath)) {

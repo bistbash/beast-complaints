@@ -128,6 +128,8 @@ export interface UserCapabilities {
   canViewAll: boolean;
   canWriteTeamResponse: boolean;
   canWriteManagerResponse: boolean;
+  /** Configure shared Gmail sender (ADMIN_GROUP / תפעול הדרכה). */
+  canManageEmail: boolean;
 }
 
 declare module 'express-serve-static-core' {

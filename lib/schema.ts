@@ -47,6 +47,58 @@ CREATE TABLE IF NOT EXISTS complaints_notifications (
 
 CREATE INDEX IF NOT EXISTS complaints_notifications_recipient_idx
   ON complaints_notifications (recipient, created_at);
+
+CREATE TABLE IF NOT EXISTS complaints_email_credentials (
+  id                    SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  google_client_id      TEXT NOT NULL,
+  google_client_secret  TEXT NOT NULL,
+  token_encryption_key  TEXT NOT NULL,
+  oauth_redirect_uri    TEXT,
+  email_from_name       TEXT,
+  updated_by            TEXT NOT NULL,
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS complaints_email_assets (
+  asset_key    TEXT PRIMARY KEY,
+  label        TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  file_data    BYTEA NOT NULL,
+  updated_by   TEXT NOT NULL,
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS complaints_email_templates (
+  justification    TEXT PRIMARY KEY CHECK (justification IN ('justified', 'unjustified')),
+  subject_template TEXT NOT NULL,
+  html_template    TEXT NOT NULL,
+  updated_by       TEXT NOT NULL,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS complaints_email_template_drafts (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind             TEXT NOT NULL CHECK (kind IN ('justified', 'unjustified')),
+  name             TEXT NOT NULL,
+  subject_template TEXT NOT NULL,
+  html_template    TEXT NOT NULL,
+  updated_by       TEXT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS complaints_email_template_drafts_kind_idx
+  ON complaints_email_template_drafts (kind, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS complaints_email_config (
+  id                SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  gmail_address     TEXT NOT NULL,
+  refresh_token_enc TEXT NOT NULL,
+  scopes            TEXT NOT NULL DEFAULT 'gmail.send',
+  connected_by      TEXT NOT NULL,
+  connected_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;
 
 export async function ensureSchema(pool: Pool): Promise<void> {

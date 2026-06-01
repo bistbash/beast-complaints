@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/inbox', label: 'פניות פתוחות', show: () => true },
   { to: '/closed', label: 'סגורות', show: () => true },
   { to: '/stats', label: 'סטטיסטיקות', show: (c) => !!(c?.isAdmin || c?.isNavigator || c?.isManager) },
+  { to: '/settings', label: 'ניהול', show: (c) => !!c?.canManageEmail },
 ];
 
 export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {

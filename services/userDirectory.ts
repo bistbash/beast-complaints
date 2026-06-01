@@ -156,4 +156,34 @@ export async function findUser(identifier: string): Promise<DirectoryUser | null
   );
 }
 
+/** Fetch Beast profile avatars in batches (requires user SSO token). */
+export async function fetchProfileAvatars(
+  usernames: string[],
+  token: string | null | undefined,
+): Promise<Record<string, string>> {
+  if (!token || !usernames.length) return {};
+  const base = portalUrl().replace(/\/$/, '');
+  const results: Record<string, string> = {};
+  try {
+    for (let i = 0; i < usernames.length; i += 80) {
+      const batch = usernames.slice(i, i + 80);
+      const { data } = await axios.get(`${base}/api/profile/batch`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { usernames: batch.join(',') },
+        timeout: 8000,
+      });
+      const profiles = data?.profiles || data;
+      if (profiles && typeof profiles === 'object') {
+        for (const [uname, profile] of Object.entries(profiles as Record<string, { avatar_url?: string }>)) {
+          const path = profile?.avatar_url;
+          if (path) results[uname] = path.startsWith('http') ? path : `${base}${path}`;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[beast-complaints] profile batch fetch failed:', err instanceof Error ? err.message : err);
+  }
+  return results;
+}
+
 export type { DirectoryUser };
