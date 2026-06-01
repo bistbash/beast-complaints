@@ -202,7 +202,7 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
    - פיתוח: `http://localhost:3050/api/settings/email/oauth/callback`
    - production: `https://<host-של-השרת>/api/settings/email/oauth/callback`
 6. בטאב **ניהול**: תחת **הגדרות Google OAuth** (מתקפל) — Client ID, Secret, מפתח הצפנה, **שמור**, **התחבר עם Google**.
-7. תחת **מכתבי סגירה** — העלו **נכסים** (לוגו, חתימה) והשתמשו ב-HTML עם משתנים כמו `{{submitter_name}}` או `{{asset_logo}}` בתוך `<img src="...">`. תבנית נפרדת לפנייה מוצדקת / לא מוצדקת.
+7. תחת **מכתבי סגירה** — העלו **נכסים** (לוגו, חתימה) והשתמשו ב-HTML עם משתנים כמו `{{submitter_name}}` או `{{asset_logo}}` בתוך `<img src="...">`. תבנית נפרדת לפנייה מוצדקת / לא מוצדקת. מדריך מלא באנגלית: [docs/email-templates.md](docs/email-templates.md).
 
 ### משתני סביבה (אופציונלי)
 
