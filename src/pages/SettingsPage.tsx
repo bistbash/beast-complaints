@@ -16,6 +16,8 @@ const OAUTH_ERRORS: Record<string, string> = {
   invalid_state: 'פג תוקף — נסו שוב',
   encryption_not_configured: 'שמרו הגדרות OAuth לפני חיבור',
   missing_refresh_token: 'נסו להתנתק מ-Google ולחבר מחדש',
+  insufficient_scopes:
+    'הרשאות Gmail לא מספיקות — נתקו את האפליקציה בחשבון Google (אבטחה → גישה של צד שלישי) וחברו מחדש',
 };
 
 const NAV: { id: Section; title: string; sub: string; icon: ReactNode }[] = [

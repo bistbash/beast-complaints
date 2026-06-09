@@ -6,6 +6,11 @@ import {
   type EmailTemplateKind,
 } from '../lib/emailTemplate.ts';
 import { renderEmailBodies } from '../lib/emailRender.ts';
+import { htmlToPdfBuffer } from '../lib/htmlToPdf.ts';
+import {
+  buildClosingEmailCoverLetter,
+  closingLetterPdfFilename,
+} from '../lib/closingEmailMessage.ts';
 import { resolveEmailFromName, resolveEmailCredentials } from './emailCredentials.ts';
 import { getRefreshToken } from './emailConfig.ts';
 import { getEmailTemplate } from './emailTemplates.ts';
@@ -43,6 +48,9 @@ export type ClosingEmailResult =
   | { ok: true }
   | { ok: false; reason: string };
 
+/**
+ * Sends closing email: short cover letter in the body + PDF attachment (full HTML template).
+ */
 export async function sendClosingEmail(inquiry: InquiryRow): Promise<ClosingEmailResult> {
   const to = inquiry.submitter_email?.trim();
   if (!to) {
@@ -61,7 +69,37 @@ export async function sendClosingEmail(inquiry: InquiryRow): Promise<ClosingEmai
     return { ok: false, reason: 'not_configured' };
   }
 
-  const { subject, text, html, inlineImages } = await buildClosingEmailContent(inquiry, 'send');
+  const creds = await resolveEmailCredentials();
+  const fromName = resolveEmailFromName(creds);
+  const kind: EmailTemplateKind =
+    inquiry.justification === JUSTIFICATION.UNJUSTIFIED ? 'unjustified' : 'justified';
+  const stored = await getEmailTemplate(kind);
+  const assets = await listEmailAssetsBinary();
+  const renderBase = {
+    subjectTemplate: stored.subjectTemplate || defaultSubjectTemplate(kind),
+    htmlTemplate: stored.htmlTemplate || defaultHtmlTemplate(kind),
+    inquiry,
+    fromName,
+    assets,
+  };
+
+  let subject: string;
+  let pdfBuffer: Buffer;
+  try {
+    subject = renderEmailBodies({ ...renderBase, mode: 'send' }).subject;
+    // PDF uses preview mode so images are data: URLs (Chromium can render them).
+    const pdfHtml = renderEmailBodies({ ...renderBase, mode: 'preview' }).html;
+    pdfBuffer = await htmlToPdfBuffer(pdfHtml);
+  } catch (err) {
+    console.warn(
+      '[beast-complaints] closing letter PDF failed:',
+      err instanceof Error ? err.message : err,
+    );
+    return { ok: false, reason: 'pdf_failed' };
+  }
+
+  const { text, html } = buildClosingEmailCoverLetter(inquiry, fromName);
+  const pdfFilename = closingLetterPdfFilename(inquiry);
 
   try {
     await sendGmailMessage({
@@ -71,12 +109,13 @@ export async function sendClosingEmail(inquiry: InquiryRow): Promise<ClosingEmai
       subject,
       text,
       html,
-      inlineImages: inlineImages.map((img) => ({
-        cid: img.cid,
-        contentType: img.contentType,
-        data: img.data,
-        filename: `${img.assetKey}.img`,
-      })),
+      attachments: [
+        {
+          filename: pdfFilename,
+          contentType: 'application/pdf',
+          data: pdfBuffer,
+        },
+      ],
     });
     return { ok: true };
   } catch (err) {

@@ -6,7 +6,16 @@ import {
 } from './emailCredentials.ts';
 import { oauthSigningSecret, signOAuthState, verifyOAuthState } from '../lib/tokenCrypto.ts';
 
-const GMAIL_SEND_SCOPE = 'https://www.googleapis.com/auth/gmail.send';
+/** Scopes requested at connect time — must cover every API used in this flow. */
+export const GMAIL_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.send',
+  // Needed to read the connected account address after OAuth (not covered by gmail.send).
+  'https://www.googleapis.com/auth/userinfo.email',
+] as const;
+
+export function gmailOAuthScopesLabel(): string {
+  return GMAIL_OAUTH_SCOPES.map((s) => s.replace('https://www.googleapis.com/auth/', '')).join(' ');
+}
 
 async function oauthClient() {
   const creds = await requireEmailCredentials();
@@ -57,7 +66,7 @@ export async function getAuthorizationUrl(state: string): Promise<string> {
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: [GMAIL_SEND_SCOPE],
+    scope: [...GMAIL_OAUTH_SCOPES],
     state,
   });
 }
@@ -73,9 +82,9 @@ export async function exchangeCodeForTokens(code: string): Promise<{
   }
   client.setCredentials(tokens);
 
-  const gmail = google.gmail({ version: 'v1', auth: client });
-  const profile = await gmail.users.getProfile({ userId: 'me' });
-  const gmailAddress = profile.data.emailAddress;
+  const oauth2 = google.oauth2({ version: 'v2', auth: client });
+  const { data: profile } = await oauth2.userinfo.get();
+  const gmailAddress = profile.email?.trim();
   if (!gmailAddress) {
     throw new Error('missing_gmail_address');
   }

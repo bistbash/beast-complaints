@@ -204,6 +204,8 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 6. בטאב **ניהול**: תחת **הגדרות Google OAuth** (מתקפל) — Client ID, Secret, מפתח הצפנה, **שמור**, **התחבר עם Google**.
 7. תחת **מכתבי סגירה** — העלו **נכסים** (לוגו, חתימה) והשתמשו ב-HTML עם משתנים כמו `{{submitter_name}}` או `{{asset_logo}}` בתוך `<img src="...">`. תבנית נפרדת לפנייה מוצדקת / לא מוצדקת. מדריך מלא באנגלית: [docs/email-templates.md](docs/email-templates.md).
 
+בסגירת פנייה (התייחסות מנהל) נשלח אוטומטית מייל לפונה: **גוף הודעה קצר** + **קובץ PDF** עם המכתב המלא (מה-HTML template).
+
 ### משתני סביבה (אופציונלי)
 
 ניתן להגדיר גם ב-`.env` כ-fallback; עדיפות לערכים שנשמרו ב-UI (PostgreSQL).
@@ -219,7 +221,9 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 |--------|--------|
 | `redirect_uri_mismatch` | ה-URI ב-Google Console חייב להיות זהה לזה שמוצג בטאב ניהול (פורט השרת 3050, לא Vite). |
 | `missing_refresh_token` | נתקו ב-Google Account → חיבור מחדש; OAuth משתמש ב-`prompt=consent`. |
+| `insufficient_scopes` / Request had insufficient authentication scopes | החיבור דורש `gmail.send` + `userinfo.email`. הסירו גישה לאפליקציה ב-[Google Account](https://myaccount.google.com/permissions) וחברו מחדש. ודאו ש-Gmail API מופעל בפרויקט Cloud. |
 | מייל סגירה לא נשלח | ודאו שמירת הגדרות Google + חיבור Gmail בטאב ניהול. |
+| `pdf_failed` בלוג | נדרש Chromium ליצירת PDF (מגיע עם `puppeteer` ב-`npm install`). ב-Linux: `pacman -S chromium` והגדירו `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium` אם צריך. |
 | שינוי מפתח הצפנה נכשל | נתקו קודם את חשבון Gmail, שנהו מפתח, שמרו, והתחברו מחדש. |
 
 ---

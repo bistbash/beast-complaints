@@ -142,6 +142,10 @@ export async function saveEmailAsset(input: {
   return meta;
 }
 
-export async function deleteEmailAsset(assetKey: string): Promise<void> {
-  await pool.query(`DELETE FROM complaints_email_assets WHERE asset_key = $1`, [assetKey]);
+export async function deleteEmailAsset(assetKey: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM complaints_email_assets WHERE asset_key = $1`,
+    [assetKey],
+  );
+  return (rowCount ?? 0) > 0;
 }

@@ -34,6 +34,7 @@ export interface AssetMeta {
   label: string;
   contentType: string;
   byteSize: number;
+  updatedAt: string;
 }
 
 export interface AssetVariable {

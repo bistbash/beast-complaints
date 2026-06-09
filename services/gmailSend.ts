@@ -9,6 +9,12 @@ export interface InlineImageAttachment {
   filename?: string;
 }
 
+export interface FileAttachment {
+  filename: string;
+  contentType: string;
+  data: Buffer;
+}
+
 async function fromHeader(gmailAddress: string): Promise<string> {
   const creds = await resolveEmailCredentials();
   const name = resolveEmailFromName(creds);
@@ -20,6 +26,12 @@ function encodeSubject(subject: string): string {
   return `=?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`;
 }
 
+function encodeAttachmentFilename(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, '_') || 'attachment';
+  const encoded = encodeURIComponent(filename);
+  return `filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 function buildRawMime(input: {
   from: string;
   to: string;
@@ -27,10 +39,14 @@ function buildRawMime(input: {
   text: string;
   html: string;
   inlineImages?: InlineImageAttachment[];
+  attachments?: FileAttachment[];
 }): string {
   const images = input.inlineImages?.filter((img) => img.data.length > 0) ?? [];
+  const files = input.attachments?.filter((f) => f.data.length > 0) ?? [];
+
   const altBoundary = `alt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const relatedBoundary = `rel_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const mixedBoundary = `mix_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   const plainPart = [
     'Content-Type: text/plain; charset=UTF-8',
@@ -48,6 +64,48 @@ function buildRawMime(input: {
     '',
   ];
 
+  /** Body: alternative, or related (alternative + inline images). */
+  const buildBodyPart = (): string[] => {
+    if (images.length === 0) {
+      return [
+        `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+        '',
+        `--${altBoundary}`,
+        ...plainPart,
+        `--${altBoundary}`,
+        ...htmlPart,
+        `--${altBoundary}--`,
+      ];
+    }
+    return [
+      `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
+      '',
+      `--${relatedBoundary}`,
+      `Content-Type: multipart/alternative; boundary="${altBoundary}"`,
+      '',
+      `--${altBoundary}`,
+      ...plainPart,
+      `--${altBoundary}`,
+      ...htmlPart,
+      `--${altBoundary}--`,
+      '',
+      ...images.flatMap((img) => {
+        const filename = img.filename || `${img.cid.replace(/@.*/, '')}.img`;
+        return [
+          `--${relatedBoundary}`,
+          `Content-Type: ${img.contentType}`,
+          'Content-Transfer-Encoding: base64',
+          `Content-ID: <${img.cid}>`,
+          `Content-Disposition: inline; filename="${filename}"`,
+          '',
+          img.data.toString('base64'),
+          '',
+        ];
+      }),
+      `--${relatedBoundary}--`,
+    ];
+  };
+
   const lines: string[] = [
     `From: ${input.from}`,
     `To: ${input.to}`,
@@ -55,36 +113,27 @@ function buildRawMime(input: {
     'MIME-Version: 1.0',
   ];
 
-  if (images.length === 0) {
-    lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`, '');
-    lines.push(`--${altBoundary}`, ...plainPart);
-    lines.push(`--${altBoundary}`, ...htmlPart);
-    lines.push(`--${altBoundary}--`);
+  if (files.length === 0) {
+    lines.push(...buildBodyPart());
     return lines.join('\r\n');
   }
 
-  lines.push(`Content-Type: multipart/related; boundary="${relatedBoundary}"`, '');
-  lines.push(`--${relatedBoundary}`);
-  lines.push(`Content-Type: multipart/alternative; boundary="${altBoundary}"`, '');
-  lines.push(`--${altBoundary}`, ...plainPart);
-  lines.push(`--${altBoundary}`, ...htmlPart);
-  lines.push(`--${altBoundary}--`, '');
+  lines.push(`Content-Type: multipart/mixed; boundary="${mixedBoundary}"`, '');
+  lines.push(`--${mixedBoundary}`, ...buildBodyPart(), '');
 
-  for (const img of images) {
-    const filename = img.filename || `${img.cid.replace(/@.*/, '')}.img`;
+  for (const file of files) {
     lines.push(
-      `--${relatedBoundary}`,
-      `Content-Type: ${img.contentType}`,
+      `--${mixedBoundary}`,
+      `Content-Type: ${file.contentType}`,
       'Content-Transfer-Encoding: base64',
-      `Content-ID: <${img.cid}>`,
-      `Content-Disposition: inline; filename="${filename}"`,
+      `Content-Disposition: attachment; ${encodeAttachmentFilename(file.filename)}`,
       '',
-      img.data.toString('base64'),
+      file.data.toString('base64'),
       '',
     );
   }
 
-  lines.push(`--${relatedBoundary}--`);
+  lines.push(`--${mixedBoundary}--`);
   return lines.join('\r\n');
 }
 
@@ -96,6 +145,7 @@ export async function sendGmailMessage(input: {
   text: string;
   html: string;
   inlineImages?: InlineImageAttachment[];
+  attachments?: FileAttachment[];
 }): Promise<void> {
   const auth = await authenticatedClient(input.refreshToken);
   const gmail = google.gmail({ version: 'v1', auth });
@@ -106,6 +156,7 @@ export async function sendGmailMessage(input: {
     text: input.text,
     html: input.html,
     inlineImages: input.inlineImages,
+    attachments: input.attachments,
   });
   const encoded = Buffer.from(raw)
     .toString('base64')

@@ -81,15 +81,19 @@ Implementation: `lib/emailTemplate.ts` → `renderTemplate()`.
 
 ## Images (graphic assets)
 
-Upload assets under **Graphic assets** with an English key (e.g. `logo`, `signature`).
+Upload assets under **Graphic assets** with any English key you choose (e.g. `logo`, `signature`, `stamp`, `hero_image`). There is no fixed list — only the naming rule below.
 
-| Asset key | Placeholder |
-|-----------|-------------|
+| Example key | Placeholder |
+|-------------|-------------|
 | `logo` | `{{asset_logo}}` |
 | `signature` | `{{asset_signature}}` |
-| `banner` | `{{asset_banner}}` |
+| `my_banner` | `{{asset_my_banner}}` |
 
-Rule: `asset_` + the key you defined.
+Rule: `asset_` + the key you defined (lowercase, starts with a letter).
+
+**Replace:** Upload again with the same key to overwrite the file (no need to delete first). Use **Replace** on a card or enter the same key in the upload form.
+
+**Delete:** Removes the asset from the database. If the browser still showed an old thumbnail, refresh the page — caching has been tightened to avoid stale images after replace/delete.
 
 ### Correct usage
 
@@ -177,6 +181,17 @@ Publishing asks for confirmation because it affects all future closing emails of
 Fixed intro paragraphs differ per template in the default design; you can change those in HTML as well as the placeholders.
 
 Emails are sent when a closing email is triggered from the inquiry workflow (requires Gmail connected under **Connection & sending**).
+
+### What the submitter receives
+
+When a manager submits a closing response, the system sends one email with:
+
+1. **Body** — A short cover message (Hebrew) stating that the summary letter is attached.
+2. **Attachment** — A **PDF** generated from the full HTML template (same design as in the editor, including embedded images).
+
+The email subject still comes from your **subject** template (e.g. `סגירת פנייה: {{subject}}`).
+
+PDF generation uses headless Chromium (`puppeteer`). On Linux servers, install Chromium if needed and set `PUPPETEER_EXECUTABLE_PATH` (see README troubleshooting).
 
 ---
 

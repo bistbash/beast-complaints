@@ -16,6 +16,7 @@ import {
   createOAuthState,
   exchangeCodeForTokens,
   getAuthorizationUrl,
+  gmailOAuthScopesLabel,
   parseOAuthState,
 } from '../services/gmailOAuth.ts';
 import { sendTestEmail } from '../services/closingEmail.ts';
@@ -84,11 +85,15 @@ router.get('/email/oauth/callback', async (req, res) => {
       gmailAddress,
       refreshToken,
       connectedBy: statePayload.connectedBy,
+      scopes: gmailOAuthScopesLabel(),
     });
     res.redirect(settingsRedirect({ connected: '1' }));
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'oauth_failed';
-    console.warn('[beast-complaints] Gmail OAuth callback failed:', msg);
+    const raw = err instanceof Error ? err.message : 'oauth_failed';
+    const msg = /insufficient.*authentication.*scopes/i.test(raw)
+      ? 'insufficient_scopes'
+      : raw;
+    console.warn('[beast-complaints] Gmail OAuth callback failed:', raw);
     res.redirect(settingsRedirect({ error: msg }));
   }
 });
@@ -208,7 +213,9 @@ router.get('/email/assets/:key/file', async (req, res, next) => {
       return;
     }
     res.setHeader('Content-Type', asset.contentType);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
+    // Admin-only blobs; avoid stale browser cache after replace/delete on same key.
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
+    res.setHeader('ETag', `"${asset.assetKey}-${asset.updatedAt}"`);
     res.send(asset.data);
   } catch (err) {
     next(err);
@@ -263,7 +270,11 @@ router.delete('/email/assets/:key', async (req, res, next) => {
       res.status(400).json({ error: 'מפתח לא תקין' });
       return;
     }
-    await deleteEmailAsset(key);
+    const removed = await deleteEmailAsset(key);
+    if (!removed) {
+      res.status(404).json({ error: 'לא נמצא' });
+      return;
+    }
     res.json({ ok: true });
   } catch (err) {
     next(err);
