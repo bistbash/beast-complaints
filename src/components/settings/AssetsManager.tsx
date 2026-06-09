@@ -167,101 +167,106 @@ export default function AssetsManager({ settings, notify }: Props) {
     }
   };
 
+  const previewVar = uploadKey.trim() ? `{{asset_${normalizeKey(uploadKey)}}}` : null;
+
   return (
-    <div className="surface-card p-5 md:p-6">
-      <h2 className="text-lg font-bold tracking-tight">נכסים גרפיים</h2>
-      <p className="muted mt-1 text-sm">
-        כל תמונה מקבלת מפתח באנגלית (למשל <code className="font-mono text-xs">logo</code>,{' '}
-        <code className="font-mono text-xs">stamp</code>) ומשתנה במכתב:{' '}
-        <code className="rounded bg-neutral-100 px-1 font-mono text-xs dark:bg-neutral-800" dir="ltr">
-          {'{{asset_<מפתח>}}'}
-        </code>
-        . אין הגבלה ללוגו/חתימה בלבד.
-      </p>
-
-      {assets.length > 0 ? (
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {assets.map((a) => {
-            const variable = `{{asset_${a.assetKey}}}`;
-            return (
-              <div key={`${a.assetKey}-${a.updatedAt}`} className="overflow-hidden rounded-xl border border-subtle bg-surface">
-                <div className="flex h-28 items-center justify-center bg-neutral-50 p-3 dark:bg-neutral-900">
-                  {thumbs[a.assetKey] ? (
-                    <img
-                      src={thumbs[a.assetKey]}
-                      alt={a.label}
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  ) : (
-                    <span className="text-xs text-neutral-400">טוען…</span>
-                  )}
-                </div>
-                <div className="border-t border-subtle p-2.5">
-                  <div className="truncate text-sm font-medium">{a.label}</div>
-                  <code className="mt-0.5 block truncate font-mono text-[10px] text-neutral-500" dir="ltr">
-                    {a.assetKey}
-                  </code>
-                  <div className="mt-0.5 text-[11px] text-neutral-400">{formatBytes(a.byteSize)}</div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1">
-                    <button
-                      type="button"
-                      className="flex-1 truncate rounded-md bg-neutral-100 px-2 py-0.5 text-start font-mono text-[10px] text-indigo-600 transition hover:bg-indigo-50 dark:bg-neutral-800 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
-                      dir="ltr"
-                      title="העתקת המשתנה"
-                      onClick={() => void copyVar(variable)}
-                    >
-                      {copied === variable ? '✓ הועתק' : variable}
-                    </button>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium text-neutral-600 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                      disabled={busy}
-                      onClick={() => {
-                        setReplaceKey(a.assetKey);
-                        replaceRef.current?.click();
-                      }}
-                    >
-                      החלף
-                    </button>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-md px-2 py-0.5 text-[10px] text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                      disabled={busy}
-                      onClick={() => void remove(a.assetKey)}
-                    >
-                      מחק
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+    <div className="assets-layout">
+      <div className="settings-block">
+        <div className="settings-block-head">
+          <div className="settings-block-title">נכסים קיימים ({assets.length})</div>
+          <div className="settings-block-desc">לחיצה על המשתנה מעתיקה אותו ללוח — הדביקו בתבנית HTML</div>
         </div>
-      ) : (
-        <p className="mt-5 rounded-xl border border-dashed border-subtle bg-surface-sunken px-4 py-6 text-center text-sm text-neutral-500">
-          עדיין לא הועלו נכסים — הוסיפו תמונה למטה
-        </p>
-      )}
+        <div className="settings-block-body">
+          {assets.length > 0 ? (
+            <div className="asset-list">
+              {assets.map((a) => {
+                const variable = `{{asset_${a.assetKey}}}`;
+                return (
+                  <div key={`${a.assetKey}-${a.updatedAt}`} className="asset-row">
+                    <div className="asset-row-thumb">
+                      {thumbs[a.assetKey] ? (
+                        <img
+                          src={thumbs[a.assetKey]}
+                          alt={a.label}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="text-[10px] text-neutral-400">…</span>
+                      )}
+                    </div>
 
-      <div className="mt-5 rounded-xl border border-subtle bg-surface-sunken p-4">
-        <h3 className="text-sm font-semibold">הוספת / החלפת נכס</h3>
-        <p className="mt-1 text-xs text-neutral-500">
-          מפתח חדש יוצר נכס; מפתח קיים מחליף את הקובץ (מחיקה לפני העלאה מחדש לא נדרשת).
-        </p>
+                    <div className="asset-row-meta">
+                      <div className="asset-row-label">{a.label}</div>
+                      <div className="asset-row-keyline">
+                        <code className="font-mono" dir="ltr">
+                          {a.assetKey}
+                        </code>
+                        <span>·</span>
+                        <span>{formatBytes(a.byteSize)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="mt-1.5 truncate rounded-md bg-neutral-100 px-2 py-0.5 text-start font-mono text-[11px] text-indigo-600 transition hover:bg-indigo-50 dark:bg-neutral-800 dark:text-indigo-400 dark:hover:bg-indigo-950/40"
+                        dir="ltr"
+                        title="העתקת המשתנה"
+                        onClick={() => void copyVar(variable)}
+                      >
+                        {copied === variable ? '✓ הועתק' : variable}
+                      </button>
+                    </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <label className="block text-xs sm:col-span-1">
-            <span className="mb-1 block font-medium text-neutral-600">מפתח (אנגלית, חובה)</span>
+                    <div className="asset-row-actions">
+                      <button
+                        type="button"
+                        className="rounded-md px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                        disabled={busy}
+                        onClick={() => {
+                          setReplaceKey(a.assetKey);
+                          replaceRef.current?.click();
+                        }}
+                      >
+                        החלף
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md px-2.5 py-1 text-xs text-rose-600 transition hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        disabled={busy}
+                        onClick={() => void remove(a.assetKey)}
+                      >
+                        מחק
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-subtle bg-surface-sunken px-4 py-8 text-center text-sm text-neutral-500">
+              עדיין לא הועלו נכסים — השתמשו בפאנל ההעלאה
+            </p>
+          )}
+        </div>
+      </div>
+
+      <aside className="settings-block lg:sticky lg:top-24">
+        <div className="settings-block-head">
+          <div className="settings-block-title">העלאת נכס</div>
+          <div className="settings-block-desc">מפתח חדש יוצר נכס; מפתח קיים מחליף את הקובץ</div>
+        </div>
+        <div className="settings-block-body">
+          <label className="block text-xs">
+            <span className="mb-1 block font-medium text-neutral-600">מפתח (אנגלית)</span>
             <input
               type="text"
               className="input !py-2 font-mono text-sm"
               dir="ltr"
               value={uploadKey}
               onChange={(e) => setUploadKey(e.target.value)}
-              placeholder="e.g. logo, stamp, hero_image"
+              placeholder="logo"
             />
           </label>
-          <label className="block text-xs sm:col-span-1">
+
+          <label className="mt-3 block text-xs">
             <span className="mb-1 block font-medium text-neutral-600">שם תצוגה</span>
             <input
               type="text"
@@ -271,60 +276,64 @@ export default function AssetsManager({ settings, notify }: Props) {
               placeholder="למשל לוגו רשמי"
             />
           </label>
-        </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-neutral-400">דוגמאות מהירות:</span>
-          {QUICK_KEYS.map((p) => (
-            <button
-              key={p.key}
-              type="button"
-              className="rounded-lg border border-subtle bg-surface px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:border-indigo-200 hover:text-indigo-700 dark:hover:text-indigo-300"
-              onClick={() => applyQuickKey(p.key, p.label)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <input
-            ref={fileRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadNew(f);
-            }}
-          />
-          <input
-            ref={replaceRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadReplace(f);
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy || !uploadKey.trim()}
-            loading={busy && !replaceKey}
-            onClick={() => fileRef.current?.click()}
-          >
-            בחירת תמונה
-          </Button>
-          {uploadKey.trim() && (
-            <code className="text-xs text-neutral-500" dir="ltr">
-              → {'{{asset_' + normalizeKey(uploadKey) + '}}'}
-            </code>
+          {previewVar && (
+            <p className="mt-2 text-xs text-neutral-500">
+              משתנה:{' '}
+              <code className="font-mono text-indigo-600 dark:text-indigo-400" dir="ltr">
+                {previewVar}
+              </code>
+            </p>
           )}
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {QUICK_KEYS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className="rounded-lg border border-subtle bg-surface px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:border-indigo-200 hover:text-indigo-700 dark:hover:text-indigo-300"
+                onClick={() => applyQuickKey(p.key, p.label)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadNew(f);
+              }}
+            />
+            <input
+              ref={replaceRef}
+              type="file"
+              accept={ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadReplace(f);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              disabled={busy || !uploadKey.trim()}
+              loading={busy && !replaceKey}
+              onClick={() => fileRef.current?.click()}
+            >
+              בחירת תמונה
+            </Button>
+            <p className="mt-2 text-center text-[11px] text-neutral-400">PNG · JPG · GIF · WEBP — עד 512KB</p>
+          </div>
         </div>
-        <p className="mt-2 text-[11px] text-neutral-400">PNG · JPG · GIF · WEBP — עד 512KB</p>
-      </div>
+      </aside>
     </div>
   );
 }

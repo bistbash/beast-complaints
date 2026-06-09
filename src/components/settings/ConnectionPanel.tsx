@@ -22,7 +22,7 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
   const creds = status?.credentials;
   const configOk = !!status?.googleConfigured && !!status?.encryptionConfigured;
 
-  const [advancedOpen, setAdvancedOpen] = useState(!creds?.configured);
+  const [oauthOpen, setOauthOpen] = useState(!creds?.configured);
   const [busy, setBusy] = useState(false);
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
@@ -59,6 +59,17 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
     }
   };
 
+  const saveSenderOnly = async () => {
+    setBusy(true);
+    const res = await saveCredentials({
+      googleClientId: googleClientId.trim(),
+      oauthRedirectUri: oauthRedirectUri.trim() || null,
+      emailFromName: emailFromName.trim() || null,
+    });
+    setBusy(false);
+    notify(res.ok ? 'ok' : 'err', res.ok ? 'שם השולח נשמר' : res.error || 'שמירה נכשלה');
+  };
+
   const connect = async () => {
     setBusy(true);
     const res = await startOAuth();
@@ -83,147 +94,182 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
   };
 
   return (
-    <div className="surface-card p-5 md:p-6">
-      <h2 className="text-lg font-bold tracking-tight">חיבור Gmail</h2>
-      <p className="muted mt-1 text-sm">חשבון משותף שדרכו נשלחים מכתבי הסגירה לפונים</p>
+    <div className="space-y-0">
+      {/* Block 1 — operational connection */}
+      <section className="settings-block">
+        <div className="settings-block-head">
+          <div className="settings-block-title">מצב החיבור</div>
+          <div className="settings-block-desc">חשבון Gmail משותף שדרכו נשלחים מכתבי הסגירה</div>
+        </div>
+        <div className="settings-block-body">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              <div
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                  status.connected
+                    ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+                    : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
+                }`}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M4 6h16v12H4V6zm0-1a1 1 0 00-1 1v12a1 1 0 001 1h16a1 1 0 001-1V6a1 1 0 00-1-1H4z"
+                    fill="currentColor"
+                  />
+                  <path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">{status.connected ? 'מחובר' : 'לא מחובר'}</div>
+                <div className="truncate font-mono text-xs text-neutral-500" dir="ltr">
+                  {status.connected ? status.gmailAddress : 'נדרש חיבור לפני שליחה'}
+                </div>
+              </div>
+            </div>
 
-      {/* Status hero */}
-      <div className="mt-5 flex flex-col gap-4 rounded-xl border border-subtle bg-surface-sunken p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-              status.connected
-                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
-                : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
-            }`}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M4 6h16v12H4V6zm0-1a1 1 0 00-1 1v12a1 1 0 001 1h16a1 1 0 001-1V6a1 1 0 00-1-1H4z"
-                fill="currentColor"
-              />
-              <path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold">{status.connected ? 'מחובר' : 'לא מחובר'}</div>
-            <div className="truncate font-mono text-xs text-neutral-500" dir="ltr">
-              {status.connected ? status.gmailAddress : 'נדרש חיבור לפני שליחה'}
+            <div className="flex flex-wrap gap-2">
+              {status.connected ? (
+                <>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void test()}>
+                    מייל בדיקה
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void doDisconnect()}>
+                    נתק
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" size="sm" disabled={busy || !configOk} onClick={() => void connect()}>
+                  התחבר עם Google
+                </Button>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap gap-2">
-          {status.connected ? (
-            <>
-              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void test()}>
-                מייל בדיקה
-              </Button>
-              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void doDisconnect()}>
-                נתק
-              </Button>
-            </>
-          ) : (
-            <Button type="button" size="sm" disabled={busy || !configOk} onClick={() => void connect()}>
-              התחבר עם Google
-            </Button>
+          {!configOk && (
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+              השלימו את הגדרות OAuth למטה ושמרו לפני החיבור.
+            </p>
           )}
         </div>
-      </div>
+      </section>
 
-      {!configOk && (
-        <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-          השלימו את הגדרות OAuth למטה ושמרו לפני החיבור.
-        </p>
-      )}
-
-      <button
-        type="button"
-        className="mt-5 flex w-full items-center justify-between rounded-xl border border-subtle bg-surface-elevated px-4 py-3 text-sm font-medium transition hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-        onClick={() => setAdvancedOpen((v) => !v)}
-      >
-        <span>הגדרות Google OAuth</span>
-        <span className="text-neutral-400" aria-hidden>
-          {advancedOpen ? '▲' : '▼'}
-        </span>
-      </button>
-
-      {advancedOpen && (
-        <div className="mt-3 grid gap-3 rounded-xl border border-subtle bg-surface-sunken p-4 sm:grid-cols-2">
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">Client ID</span>
-            <input
-              type="text"
-              className="input font-mono text-xs"
-              dir="ltr"
-              value={googleClientId}
-              onChange={(e) => setGoogleClientId(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
+      {/* Block 2 — sender identity (operational) */}
+      <section className="settings-block">
+        <div className="settings-block-head">
+          <div className="settings-block-title">זהות השולח</div>
+          <div className="settings-block-desc">איך המכתב יופיע בשורת From אצל הפונה</div>
+        </div>
+        <div className="settings-block-body">
           <label className="block">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">Client Secret</span>
-            <input
-              type="password"
-              className="input font-mono text-xs"
-              dir="ltr"
-              value={googleClientSecret}
-              onChange={(e) => setGoogleClientSecret(e.target.value)}
-              placeholder={creds.hasClientSecret ? 'ללא שינוי' : ''}
-              autoComplete="new-password"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 flex justify-between text-xs font-medium text-neutral-500">
-              <span>מפתח הצפנה</span>
-              <button
-                type="button"
-                className="text-indigo-600 hover:underline dark:text-indigo-400"
-                onClick={() => setTokenEncryptionKey(generateEncryptionKey())}
-              >
-                צור מפתח
-              </button>
-            </span>
-            <input
-              type="password"
-              className="input font-mono text-xs"
-              dir="ltr"
-              value={tokenEncryptionKey}
-              onChange={(e) => setTokenEncryptionKey(e.target.value)}
-              placeholder={creds.hasEncryptionKey ? 'ללא שינוי' : ''}
-              autoComplete="new-password"
-            />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">Redirect URI</span>
-            <input
-              type="text"
-              className="input font-mono text-xs"
-              dir="ltr"
-              value={oauthRedirectUri}
-              onChange={(e) => setOauthRedirectUri(e.target.value)}
-              placeholder={creds.suggestedRedirectUri}
-            />
-            <p className="mt-1.5 break-all font-mono text-[10px] text-neutral-400" dir="ltr">
-              {redirectHint}
-            </p>
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="mb-1 block text-xs font-medium text-neutral-500">שם שולח</span>
+            <span className="mb-1 block text-xs font-medium text-neutral-500">שם תצוגה</span>
             <input
               type="text"
               className="input"
               value={emailFromName}
               onChange={(e) => setEmailFromName(e.target.value)}
+              placeholder="פניות לקוח — ביסלת"
             />
           </label>
-          <div className="sm:col-span-2">
-            <Button type="button" size="sm" disabled={busy} loading={busy} onClick={() => void save()}>
-              שמירת הגדרות
+          {status.connected && status.gmailAddress && (
+            <p className="mt-2 text-xs text-neutral-500">
+              כתובת:{' '}
+              <span className="font-mono" dir="ltr">
+                {status.gmailAddress}
+              </span>
+            </p>
+          )}
+          <div className="mt-3">
+            <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void saveSenderOnly()}>
+              שמירת שם השולח
             </Button>
           </div>
         </div>
-      )}
+      </section>
+
+      {/* Block 3 — technical OAuth */}
+      <section className="settings-block">
+        <button
+          type="button"
+          className="settings-block-head flex w-full items-center justify-between text-start"
+          onClick={() => setOauthOpen((v) => !v)}
+        >
+          <span>
+            <span className="settings-block-title">הגדרות Google OAuth</span>
+            <span className="settings-block-desc block">Client ID, Secret, מפתח הצפנה ו-Redirect URI</span>
+          </span>
+          <span className="shrink-0 text-neutral-400 ps-3" aria-hidden>
+            {oauthOpen ? '▲' : '▼'}
+          </span>
+        </button>
+
+        {oauthOpen && (
+          <div className="settings-block-body grid gap-3 sm:grid-cols-2">
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">Client ID</span>
+              <input
+                type="text"
+                className="input font-mono text-xs"
+                dir="ltr"
+                value={googleClientId}
+                onChange={(e) => setGoogleClientId(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">Client Secret</span>
+              <input
+                type="password"
+                className="input font-mono text-xs"
+                dir="ltr"
+                value={googleClientSecret}
+                onChange={(e) => setGoogleClientSecret(e.target.value)}
+                placeholder={creds.hasClientSecret ? 'ללא שינוי' : ''}
+                autoComplete="new-password"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 flex justify-between text-xs font-medium text-neutral-500">
+                <span>מפתח הצפנה</span>
+                <button
+                  type="button"
+                  className="text-indigo-600 hover:underline dark:text-indigo-400"
+                  onClick={() => setTokenEncryptionKey(generateEncryptionKey())}
+                >
+                  צור מפתח
+                </button>
+              </span>
+              <input
+                type="password"
+                className="input font-mono text-xs"
+                dir="ltr"
+                value={tokenEncryptionKey}
+                onChange={(e) => setTokenEncryptionKey(e.target.value)}
+                placeholder={creds.hasEncryptionKey ? 'ללא שינוי' : ''}
+                autoComplete="new-password"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-neutral-500">Redirect URI</span>
+              <input
+                type="text"
+                className="input font-mono text-xs"
+                dir="ltr"
+                value={oauthRedirectUri}
+                onChange={(e) => setOauthRedirectUri(e.target.value)}
+                placeholder={creds.suggestedRedirectUri}
+              />
+              <p className="mt-1.5 break-all font-mono text-[10px] text-neutral-400" dir="ltr">
+                {redirectHint}
+              </p>
+            </label>
+            <div className="sm:col-span-2">
+              <Button type="button" size="sm" disabled={busy} loading={busy} onClick={() => void save()}>
+                שמירת הגדרות OAuth
+              </Button>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

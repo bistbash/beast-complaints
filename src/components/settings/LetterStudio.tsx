@@ -365,6 +365,7 @@ export default function LetterStudio({ settings, notify }: Props) {
 
       {/* Drafts bar */}
       <div className="draft-bar">
+        <span className="shrink-0 ps-1 text-[10px] font-bold uppercase tracking-wide text-neutral-400">נוסח</span>
         <button type="button" className="draft-chip" data-active={!isDraft} onClick={() => selectSource({ type: 'published' })}>
           <span className="draft-chip-dot bg-emerald-500" />
           תבנית פעילה
