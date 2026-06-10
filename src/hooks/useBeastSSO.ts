@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../utils/api.ts';
 import { getPortalUrl } from '../utils/portalUrl.ts';
+import { invalidateCapabilities } from './useCapabilities.ts';
 
 interface BeastUser {
   username: string;
@@ -117,6 +118,7 @@ export default function useBeastSSO(): UseBeastSSO {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     sessionStorage.removeItem(PENDING_TOKEN_KEY);
+    invalidateCapabilities();
     setUser(null);
     setAuthenticated(false);
   }, []);

@@ -1,5 +1,6 @@
 import type { InquiryRow } from './types.ts';
 import { buildTemplateContext, renderTemplate } from './emailTemplate.ts';
+import { injectLetterLayoutFix } from './letterLayoutFix.ts';
 import type { EmailAssetBinary } from '../services/emailAssets.ts';
 import { buildAssetContext } from '../services/emailAssets.ts';
 
@@ -46,7 +47,7 @@ export function renderEmailBodies(input: {
   const merged = { ...textCtx, ...assetCtx };
 
   const subject = renderTemplate(input.subjectTemplate, merged);
-  const html = renderTemplate(input.htmlTemplate, merged);
+  const html = injectLetterLayoutFix(renderTemplate(input.htmlTemplate, merged));
   const text = htmlToPlainText(html);
 
   const inlineImages: InlineEmailImage[] =

@@ -241,12 +241,20 @@ async function main() {
     legacy_id: string | null;
   }>(`SELECT inquiry_id, "timestamp", email, legacy_id FROM ${table}`);
   const byKey = new Map<string, { inquiry_id: string; legacy_id: string | null }>();
+  const byEmailTitle = new Map<string, string>();
   const byLegacyId = new Map<string, string>();
   for (const r of existing.rows) {
     if (r.timestamp && r.email) {
       byKey.set(keyFor(r.timestamp, r.email), { inquiry_id: r.inquiry_id, legacy_id: r.legacy_id });
     }
     if (r.legacy_id) byLegacyId.set(r.legacy_id, r.inquiry_id);
+  }
+
+  const titleRows = await pool.query<{ inquiry_id: string; email: string | null; title: string | null }>(
+    `SELECT inquiry_id, email, title FROM ${table}`,
+  );
+  for (const r of titleRows.rows) {
+    if (r.email && r.title) byEmailTitle.set(emailTitleKey(r.email, r.title), r.inquiry_id);
   }
 
   console.log(`\nLoaded ${existing.rows.length} existing rows from "${meta.tableName}".`);
@@ -278,8 +286,12 @@ async function main() {
     const tsString = toGoogleSheetsFormat(createdDate);
     const key = keyFor(tsString, row.reporterEmail);
 
+    const title = row.title || row.subject || '';
     let inquiryId =
-      byLegacyId.get(row.id) ?? byKey.get(key)?.inquiry_id ?? null;
+      byLegacyId.get(row.id) ??
+      byKey.get(key)?.inquiry_id ??
+      (title ? byEmailTitle.get(emailTitleKey(row.reporterEmail, title)) : undefined) ??
+      null;
     const alreadyImported = !!byLegacyId.get(row.id);
 
     if (!inquiryId) {
@@ -432,6 +444,10 @@ async function main() {
 
 function keyFor(timestamp: string, email: string): string {
   return `${(timestamp || '').trim()}||${(email || '').trim().toLowerCase()}`;
+}
+
+function emailTitleKey(email: string, title: string): string {
+  return `${email.trim().toLowerCase()}||${title.trim()}`;
 }
 
 main().catch((err) => {

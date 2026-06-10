@@ -1,6 +1,7 @@
 import type { InquiryRow } from './types.ts';
 import { CATEGORIES, JUSTIFICATION_LABEL_HE, type JustificationDecision } from './constants.ts';
 import { DEFAULT_TARGET_GROUPS } from './constants.ts';
+import { institutionalClosingLetterHtml } from './closingLetterHtml.ts';
 
 export type EmailTemplateKind = JustificationDecision;
 
@@ -20,8 +21,8 @@ export const EMAIL_TEMPLATE_VARIABLES: EmailTemplateVariable[] = [
   { key: 'justification_label', label: 'החלטה (מוצדקת/לא)' },
   { key: 'manager_response', label: 'התייחסות מנהל' },
   { key: 'team_response', label: 'התייחסות צוות' },
-  { key: 'closed_at', label: 'תאריך סגירה' },
-  { key: 'form_timestamp', label: 'תאריך הגשה בטופס' },
+  { key: 'closed_at', label: 'תאריך סגירה (ללא שעה)' },
+  { key: 'form_timestamp', label: 'תאריך הגשה (ללא שעה)' },
   { key: 'grade_level', label: 'שכבה' },
   { key: 'class_name', label: 'כיתה' },
   { key: 'department', label: 'מחלקה' },
@@ -41,13 +42,45 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function formatClosedDate(closedAt: string | null): string {
-  if (!closedAt) return new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
-  try {
-    return new Date(closedAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
-  } catch {
-    return closedAt;
+const LETTER_DATE_OPTS: Intl.DateTimeFormatOptions = {
+  timeZone: 'Asia/Jerusalem',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+};
+
+/** Parse sheet-style (dd/mm/yyyy) or ISO timestamps; returns null if unparseable. */
+function parseLetterDateInput(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed) || trimmed.includes('T')) {
+    const d = new Date(trimmed);
+    return Number.isNaN(d.getTime()) ? null : d;
   }
+
+  const sheet = trimmed.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})/);
+  if (sheet) {
+    const d = new Date(Number(sheet[3]), Number(sheet[2]) - 1, Number(sheet[1]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(trimmed);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Formal letter date — Hebrew long form, no time (e.g. "9 ביוני 2026"). */
+export function formatLetterDate(value: string | Date | null | undefined): string {
+  if (!value) {
+    return new Date().toLocaleDateString('he-IL', LETTER_DATE_OPTS);
+  }
+  const d = value instanceof Date ? value : parseLetterDateInput(String(value));
+  if (!d || Number.isNaN(d.getTime())) {
+    // Strip trailing time from strings like "01/06/2026 10:00:00"
+    const stripped = String(value).replace(/\s+\d{1,2}:\d{2}(:\d{2})?\s*$/, '').trim();
+    return stripped || '—';
+  }
+  return d.toLocaleDateString('he-IL', LETTER_DATE_OPTS);
 }
 
 function categoryLabel(value: string | null): string {
@@ -85,8 +118,8 @@ export function buildTemplateContext(inquiry: InquiryRow, fromName: string): Rec
     justification_label: justificationLabel,
     manager_response: str(inquiry.manager_response),
     team_response: str(inquiry.team_response),
-    closed_at: formatClosedDate(inquiry.closed_at),
-    form_timestamp: str(inquiry.form_timestamp),
+    closed_at: formatLetterDate(inquiry.closed_at),
+    form_timestamp: formatLetterDate(inquiry.form_timestamp),
     grade_level: str(inquiry.grade_level),
     class_name: inquiry.class_name != null ? String(inquiry.class_name) : '—',
     department: str(inquiry.department),
@@ -114,64 +147,35 @@ export function defaultSubjectTemplate(_kind: EmailTemplateKind): string {
 }
 
 export function defaultHtmlTemplate(kind: EmailTemplateKind): string {
-  const intro =
-    kind === 'justified'
-      ? 'לאחר בדיקה, הפנייה שלך נמצאה <strong>מוצדקת</strong>. להלן סיכום הטיפול וההחלטה:'
-      : 'לאחר בדיקה מעמיקה, <strong>לא נמצא בסיס</strong> להמשך טיפול בפנייה זו. להלן הסבר המנהל:';
-
-  const accent = kind === 'justified' ? '#059669' : '#64748b';
-
-  return `<!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
-<body style="margin:0;padding:0;background:#eef2f7;font-family:'Assistant',Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:40px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,0.08);">
-          <tr>
-            <td style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:32px 36px;">
-              <img src="{{asset_logo}}" alt="" style="max-width:140px;height:auto;display:block;margin-bottom:14px;" />
-              <p style="margin:0 0 6px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.88);letter-spacing:0.02em;">פניות לקוח</p>
-              <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;line-height:1.3;">עדכון על פנייתך</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:36px 36px 28px;color:#1e293b;font-size:15px;line-height:1.75;">
-              <p style="margin:0 0 20px;font-size:16px;">שלום <strong>{{submitter_name}}</strong>,</p>
-              <p style="margin:0 0 24px;color:#475569;">${intro}</p>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;">
-                <tr>
-                  <td style="padding:18px 20px;">
-                    <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">פרטי הפנייה</p>
-                    <p style="margin:0 0 8px;font-size:14px;"><span style="color:#64748b;">נושא:</span> {{subject}}</p>
-                    <p style="margin:0 0 8px;font-size:14px;"><span style="color:#64748b;">החלטה:</span> <span style="color:${accent};font-weight:600;">{{justification_label}}</span></p>
-                    <p style="margin:0;font-size:14px;"><span style="color:#64748b;">תאריך סגירה:</span> {{closed_at}}</p>
-                  </td>
-                </tr>
-              </table>
-              <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#64748b;">התייחסות המנהל</p>
-              <div style="white-space:pre-wrap;background:#f1f5f9;border-right:4px solid #6366f1;padding:16px 18px;border-radius:0 10px 10px 0;font-size:14px;line-height:1.65;color:#334155;">{{manager_response}}</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:22px 36px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-              <img src="{{asset_signature}}" alt="" style="max-width:180px;height:auto;display:block;margin-bottom:12px;" />
-              <p style="margin:0;font-size:14px;color:#64748b;">בברכה,</p>
-              <p style="margin:6px 0 0;font-size:15px;font-weight:600;color:#1e293b;">{{from_name}}</p>
-            </td>
-          </tr>
-        </table>
-        <p style="margin:20px 0 0;font-size:11px;color:#94a3b8;text-align:center;">הודעה זו נשלחה אוטומטית ממערכת פניות הלקוח</p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  return institutionalClosingLetterHtml(kind);
 }
+
+/** Long sample for preview — demonstrates multi-page PDF / letter flow. */
+export const SAMPLE_MANAGER_RESPONSE_PREVIEW = `【 דוגמה: התייחסות ארוכה להמחשת מכתב רב-עמודי 】
+
+לאחר שבחנו את פנייתך לעומק, להלן פירוט מלא של מהלך הטיפול, הממצאים וההחלטה:
+
+1. קליטת הפנייה — הפנייה נקלטה במערכת, הועברה לגורם הרלוונטי בצוות ההוראה ונבדקה מול נתוני השיעורים והחומר שנמסר בכיתה.
+
+2. בדיקה מול צוות ההוראה — נערכה שיחה עם מורה המקצוע, נבדקו דפי העבודה, ספרי הלימוד והנחיות שנמסרו לתלמידים במהלך השבועות האחרונים.
+
+3. התאמות שנעשו — במקרים שזוהו פערים, המורה עדכנה את לוח המטלות, פרסמה בקבוצת הכיתה סיכום מסודר והעניקה שיעורי חיזוק לתלמידים שהתקשו.
+
+4. מדיניות בית הספר — חלוקת שיעורי הבית נקבעת בהתאם לתכנית הלימודים המאושרת, תוך שמירה על איזון בין מקצועות ועומס סביר לשכבה.
+
+5. תקשורת עם הורים — אנו ממליצים לפנות למחנכת או למורה המקצועי לעדכונים שוטפים. קיימות שעות קבלה שבועיות וערוץ דיגיטלי לעדכונים.
+
+6. המשך מעקב — הצוות ימשיך לעקוב אחר התקדמות התלמידים ולוודא שהחומר מובן. במידת הצורך תוצע פגישה משותפת עם ההורים.
+
+7. סיכום — אנו רואים חשיבות רבה בשיתוף ההורים ובשקיפות. הפנייה שלך תרמה לחידוד נקודות לשיפור ולעדכון נהלים מול הכיתה.
+
+להלן הרחבה נוספת לצורך הדגמת עמוד שני במכתב:
+
+במהלך השבועות הקרובים יתקיימו ישיבות צוות להערכת נהלי שיעורי הבית. נבחן האם יש צורך בעדכון לוחות, בהגדלת זמן הסבר בכיתה או בהקטנת היקף המטלות בתקופות עמוסות.
+
+אנו מבקשים להגיב לפנייה זו בתוך חמישה ימי עסקים במקרה של שאלות המשך. ניתן לפנות למזכירות או למחנכת בטלפון או במייל.
+
+תודה על שיתוף הפעולה ועל העניין בקידום הלמידה והחינוך בקרב בני הנוער במכללה.`;
 
 export function sampleInquiryForPreview(kind: EmailTemplateKind): InquiryRow {
   return {
@@ -191,7 +195,7 @@ export function sampleInquiryForPreview(kind: EmailTemplateKind): InquiryRow {
     entity: null,
     role: null,
     role_bislat: null,
-    form_timestamp: '01/06/2026 10:00:00',
+    form_timestamp: '2026-06-01',
     created_at: new Date().toISOString(),
     routed_at: null,
     routed_by: null,
@@ -200,7 +204,7 @@ export function sampleInquiryForPreview(kind: EmailTemplateKind): InquiryRow {
     team_response: 'הצוות בדק את הנושא ולהלן הממצאים.',
     team_response_at: null,
     team_response_by: null,
-    manager_response: 'תודה על פנייתך. לאחר בדיקה, זהו ניסוח לדוגמה של התייחסות המנהל.',
+    manager_response: SAMPLE_MANAGER_RESPONSE_PREVIEW,
     manager_response_at: new Date().toISOString(),
     manager_response_by: 'manager@school.local',
     justification: kind,

@@ -29,8 +29,10 @@ function fetchOnce(): Promise<Capabilities | null> {
   cache.promise = api
     .get('/api/inquiries/capabilities')
     .then((res) => {
-      cache.value = res.data?.capabilities ?? null;
-      return cache.value;
+      if (res.status >= 400) return null;
+      const caps = res.data?.capabilities ?? null;
+      if (caps) cache.value = caps;
+      return caps;
     })
     .catch(() => null)
     .finally(() => {
@@ -43,11 +45,16 @@ export function invalidateCapabilities(): void {
   cache = { value: null, promise: null };
 }
 
-export default function useCapabilities() {
-  const [capabilities, setCapabilities] = useState<Capabilities | null>(cache.value);
-  const [loading, setLoading] = useState(!cache.value);
+export default function useCapabilities(enabled = true) {
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(enabled ? cache.value : null);
+  const [loading, setLoading] = useState(enabled && !cache.value);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setLoading(!cache.value);
     fetchOnce().then((c) => {
@@ -59,7 +66,7 @@ export default function useCapabilities() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return { capabilities, loading };
 }

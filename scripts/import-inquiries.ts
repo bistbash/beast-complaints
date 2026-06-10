@@ -141,12 +141,19 @@ async function main() {
   }
 
   const table = quoteIdent(meta.tableName);
-  const existing = await pool.query<{ inquiry_id: string; timestamp: string; email: string }>(
-    `SELECT inquiry_id, "timestamp", email FROM ${table}`,
-  );
+  const existing = await pool.query<{
+    inquiry_id: string;
+    timestamp: string;
+    email: string;
+    title: string | null;
+  }>(`SELECT inquiry_id, "timestamp", email, title FROM ${table}`);
   const existingMap = new Map<string, string>();
+  const existingByEmailTitle = new Map<string, string>();
   for (const r of existing.rows) {
     existingMap.set(keyFor(r.timestamp, r.email), r.inquiry_id);
+    if (r.email && r.title) {
+      existingByEmailTitle.set(emailTitleKey(r.email, r.title), r.inquiry_id);
+    }
   }
 
   let inserted = 0;
@@ -169,7 +176,9 @@ async function main() {
       continue;
     }
     const key = keyFor(record.timestamp, record.email);
-    const existingId = existingMap.get(key);
+    const existingId =
+      existingMap.get(key) ??
+      (record.title ? existingByEmailTitle.get(emailTitleKey(record.email, record.title)) : undefined);
 
     if (existingId) {
       // Update only sheet columns — preserve workflow state.
@@ -226,6 +235,10 @@ async function main() {
 
 function keyFor(timestamp: string, email: string): string {
   return `${(timestamp || '').trim()}||${(email || '').trim().toLowerCase()}`;
+}
+
+function emailTitleKey(email: string, title: string): string {
+  return `${email.trim().toLowerCase()}||${title.trim()}`;
 }
 
 main().catch((err) => {

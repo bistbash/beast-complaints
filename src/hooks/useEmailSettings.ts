@@ -261,6 +261,44 @@ export function useEmailSettings() {
     [],
   );
 
+  const previewTemplatePdf = useCallback(
+    async (
+      kind: TemplateKind,
+      subjectTemplate: string,
+      htmlTemplate: string,
+    ): Promise<Result<Blob>> => {
+      try {
+        const res = await api.post<Blob>(
+          '/api/settings/email/templates/preview-pdf',
+          { kind, subjectTemplate, htmlTemplate },
+          { responseType: 'blob', timeout: 120_000 },
+        );
+        if (res.status >= 400 || !(res.data instanceof Blob)) {
+          try {
+            const text = await (res.data as Blob).text();
+            const parsed = JSON.parse(text) as { error?: string };
+            return { ok: false, error: parsed.error || 'יצירת PDF נכשלה' };
+          } catch {
+            return { ok: false, error: 'יצירת PDF נכשלה' };
+          }
+        }
+        if (res.data.type && res.data.type !== 'application/pdf') {
+          try {
+            const text = await res.data.text();
+            const parsed = JSON.parse(text) as { error?: string };
+            return { ok: false, error: parsed.error || 'יצירת PDF נכשלה' };
+          } catch {
+            return { ok: false, error: 'יצירת PDF נכשלה' };
+          }
+        }
+        return { ok: true, data: res.data };
+      } catch {
+        return { ok: false, error: 'יצירת PDF נכשלה — בדקו שהשרת זמין ו-Chromium מותקן' };
+      }
+    },
+    [],
+  );
+
   /* ---- assets ---- */
 
   const uploadAsset = useCallback(
@@ -308,6 +346,7 @@ export function useEmailSettings() {
     saveTemplate,
     resetTemplate,
     previewTemplate,
+    previewTemplatePdf,
     createDraft,
     updateDraft,
     deleteDraft,

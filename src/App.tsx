@@ -15,14 +15,15 @@ import ChatWidget from './components/chat/ChatWidget.tsx';
 export default function App() {
   useTheme();
   const { user, loading, authenticated, logout, ssoConfigError } = useBeastSSO();
-  const { capabilities } = useCapabilities();
+  const authReady = authenticated && !loading;
+  const { capabilities, loading: capsLoading } = useCapabilities(authReady);
 
   if (ssoConfigError) {
     return <ErrorShell title="תצורת SSO" description={ssoConfigError} />;
   }
 
-  if (loading || !authenticated) {
-    return <LoadingScreen message="מתחבר ל-Beast…" />;
+  if (loading || !authenticated || capsLoading) {
+    return <LoadingScreen message={loading || !authenticated ? 'מתחבר ל-Beast…' : 'טוען הרשאות…'} />;
   }
 
   return (

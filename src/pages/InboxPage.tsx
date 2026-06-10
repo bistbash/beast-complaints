@@ -31,6 +31,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
   const [filters, setFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [groups, setGroups] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [listTotal, setListTotal] = useState(0);
   const [params, setParams] = useSearchParams();
   const { capabilities } = useCapabilities();
 
@@ -90,12 +91,14 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
         if (cancelled) return;
         setItems(res.data?.inquiries || []);
         setDisplayNames(res.data?.displayNames || {});
+        setListTotal(res.data?.pagination?.total ?? res.data?.inquiries?.length ?? 0);
       })
       .catch((err) => {
         if (cancelled) return;
         setError(err.response?.data?.error || 'טעינת פניות נכשלה');
         setItems([]);
         setDisplayNames({});
+        setListTotal(0);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -195,6 +198,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!isClosed && <KpiChip label="פתוחות" value={scopeCounts.all} tone="neutral" />}
+          {isClosed && <KpiChip label="סגורות" value={listTotal} tone="neutral" />}
           {stats.urgent > 0 && <KpiChip label="דחופות" value={stats.urgent} tone="danger" />}
         </div>
       </header>

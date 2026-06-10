@@ -14,6 +14,7 @@ import {
   type JustificationDecision,
 } from '../lib/constants.ts';
 import type { DatasetMeta, InquiryRow, MessageRow, HistoryRow } from '../lib/types.ts';
+import { INQUIRY_DEDUPE_ORDER, INQUIRY_DEDUPE_PARTITION, inquiryListOrderSql } from '../lib/inquiryDedupe.ts';
 
 /**
  * Columns the db-smart sync populates from the Google Form (do not touch via INSERT/UPDATE).
@@ -121,6 +122,9 @@ export async function listInquiries(meta: DatasetMeta, query: ListInquiriesQuery
     return `$${whereParams.length}`;
   }
 
+  // Rows without inquiry_id are sheet-only ghosts from db-smart sync — ignore them.
+  where.push(`inquiry_id IS NOT NULL`);
+
   if (query.open === true) {
     where.push(`status IN ('new','routed','awaiting_manager')`);
   } else if (query.open === false) {
@@ -151,14 +155,18 @@ export async function listInquiries(meta: DatasetMeta, query: ListInquiriesQuery
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const table = quoteIdent(meta.tableName);
-  const countSql = `SELECT COUNT(*)::int AS total FROM ${table} ${whereSql}`;
+  const dedupedFrom = `
+    SELECT *, ROW_NUMBER() OVER (
+      PARTITION BY ${INQUIRY_DEDUPE_PARTITION}
+      ORDER BY ${INQUIRY_DEDUPE_ORDER}
+    ) AS _dedupe_rank
+    FROM ${table}
+    ${whereSql}`;
+  const countSql = `SELECT COUNT(*)::int AS total FROM (${dedupedFrom}) deduped WHERE deduped._dedupe_rank = 1`;
   const rowsSql = `SELECT ${INQUIRY_SELECT}
-                   FROM ${table}
-                   ${whereSql}
-                   ORDER BY
-                     CASE status WHEN 'new' THEN 1 WHEN 'routed' THEN 2 WHEN 'awaiting_manager' THEN 3 ELSE 4 END,
-                     CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
-                     last_activity_at DESC NULLS LAST
+                   FROM (${dedupedFrom}) deduped
+                   WHERE deduped._dedupe_rank = 1
+                   ORDER BY ${inquiryListOrderSql('deduped')}
                    LIMIT $${whereParams.length + 1} OFFSET $${whereParams.length + 2}`;
 
   const [countRes, rowsRes] = await Promise.all([
@@ -446,26 +454,42 @@ export async function logHistory(
   );
 }
 
+function dedupedTableSql(table: string, whereSql = ''): string {
+  return `(
+    SELECT deduped.*
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY ${INQUIRY_DEDUPE_PARTITION}
+        ORDER BY ${INQUIRY_DEDUPE_ORDER}
+      ) AS _dedupe_rank
+      FROM ${table}
+      ${whereSql}
+    ) deduped
+    WHERE deduped._dedupe_rank = 1
+  ) inquiries`;
+}
+
 export async function getStats(meta: DatasetMeta) {
   const table = quoteIdent(meta.tableName);
+  const deduped = dedupedTableSql(table);
   const [byStatus, byPriority, byGroup, slaBreaches, avgResolution] = await Promise.all([
     pool.query<{ status: string; count: number }>(
-      `SELECT status, COUNT(*)::int AS count FROM ${table} GROUP BY status`,
+      `SELECT status, COUNT(*)::int AS count FROM ${deduped} GROUP BY status`,
     ),
     pool.query<{ priority: string; count: number }>(
-      `SELECT priority, COUNT(*)::int AS count FROM ${table} GROUP BY priority`,
+      `SELECT priority, COUNT(*)::int AS count FROM ${deduped} GROUP BY priority`,
     ),
     pool.query<{ assigned_group: string | null; count: number }>(
-      `SELECT assigned_group, COUNT(*)::int AS count FROM ${table} GROUP BY assigned_group`,
+      `SELECT assigned_group, COUNT(*)::int AS count FROM ${deduped} GROUP BY assigned_group`,
     ),
     pool.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM ${table}
+      `SELECT COUNT(*)::int AS count FROM ${deduped}
         WHERE due_at IS NOT NULL AND due_at < NOW()
           AND status NOT IN ('closed')`,
     ),
     pool.query<{ avg_hours: number | null }>(
       `SELECT AVG(EXTRACT(EPOCH FROM (closed_at - created_at))/3600)::float AS avg_hours
-         FROM ${table} WHERE closed_at IS NOT NULL`,
+         FROM ${deduped} WHERE closed_at IS NOT NULL`,
     ),
   ]);
 

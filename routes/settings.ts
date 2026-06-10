@@ -45,7 +45,10 @@ import {
   type EmailTemplateKind,
 } from '../lib/emailTemplate.ts';
 import { renderEmailBodies } from '../lib/emailRender.ts';
+import { htmlToPdfBuffer } from '../lib/htmlToPdf.ts';
+import { closingLetterPdfFilename } from '../lib/closingEmailMessage.ts';
 import { resolveEmailFromName, resolveEmailCredentials } from '../services/emailCredentials.ts';
+import { listEmailAssetsBinary } from '../services/emailAssets.ts';
 
 const router: Router = Router();
 
@@ -405,37 +408,83 @@ router.delete('/email/templates/:kind', async (req, res, next) => {
   }
 });
 
+async function renderTemplatePreviewBodies(
+  kind: EmailTemplateKind,
+  subjectTemplate: string | undefined,
+  htmlTemplate: string | undefined,
+) {
+  const templates = await getAllEmailTemplates();
+  const subject =
+    typeof subjectTemplate === 'string' ? subjectTemplate : templates[kind].subjectTemplate;
+  const html =
+    typeof htmlTemplate === 'string' ? htmlTemplate : templates[kind].htmlTemplate;
+
+  const creds = await resolveEmailCredentials();
+  const fromName = resolveEmailFromName(creds);
+  const inquiry = sampleInquiryForPreview(kind);
+  const assets = await listEmailAssetsBinary();
+  const rendered = renderEmailBodies({
+    subjectTemplate: subject,
+    htmlTemplate: html,
+    inquiry,
+    fromName,
+    assets,
+    mode: 'preview',
+  });
+
+  return { rendered, inquiry };
+}
+
 router.post('/email/templates/preview', async (req, res, next) => {
   try {
     const kind: EmailTemplateKind =
       req.body?.kind === 'unjustified' ? 'unjustified' : 'justified';
-    const subjectTemplate =
-      typeof req.body?.subjectTemplate === 'string'
-        ? req.body.subjectTemplate
-        : (await getAllEmailTemplates())[kind].subjectTemplate;
-    const htmlTemplate =
-      typeof req.body?.htmlTemplate === 'string'
-        ? req.body.htmlTemplate
-        : (await getAllEmailTemplates())[kind].htmlTemplate;
-
-    const creds = await resolveEmailCredentials();
-    const fromName = resolveEmailFromName(creds);
-    const inquiry = sampleInquiryForPreview(kind);
-    const { listEmailAssetsBinary } = await import('../services/emailAssets.ts');
-    const assets = await listEmailAssetsBinary();
-    const rendered = renderEmailBodies({
-      subjectTemplate,
-      htmlTemplate,
-      inquiry,
-      fromName,
-      assets,
-      mode: 'preview',
-    });
+    const { rendered } = await renderTemplatePreviewBodies(
+      kind,
+      req.body?.subjectTemplate,
+      req.body?.htmlTemplate,
+    );
 
     res.json({
       subject: rendered.subject,
       html: rendered.html,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/email/templates/preview-pdf', async (req, res, next) => {
+  try {
+    const kind: EmailTemplateKind =
+      req.body?.kind === 'unjustified' ? 'unjustified' : 'justified';
+    const { rendered, inquiry } = await renderTemplatePreviewBodies(
+      kind,
+      req.body?.subjectTemplate,
+      req.body?.htmlTemplate,
+    );
+
+    let pdf: Buffer;
+    try {
+      pdf = await htmlToPdfBuffer(rendered.html);
+    } catch (err) {
+      console.warn(
+        '[beast-complaints] template preview PDF failed:',
+        err instanceof Error ? err.message : err,
+      );
+      res.status(503).json({
+        error: 'יצירת PDF נכשלה — Chromium לא זמין בשרת (הגדירו PUPPETEER_EXECUTABLE_PATH)',
+      });
+      return;
+    }
+    const filename = closingLetterPdfFilename(inquiry);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+    );
+    res.send(pdf);
   } catch (err) {
     next(err);
   }

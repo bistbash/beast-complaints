@@ -40,6 +40,7 @@ export default function LetterStudio({ settings, notify }: Props) {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [device, setDevice] = useState<PreviewDevice>('desktop');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [nameTarget, setNameTarget] = useState<string | 'new' | null>(null);
@@ -111,6 +112,32 @@ export default function LetterStudio({ settings, notify }: Props) {
   useEffect(() => {
     void runPreview(debouncedSubject, debouncedHtml, kind);
   }, [debouncedSubject, debouncedHtml, kind, runPreview]);
+
+  const downloadPdf = useCallback(async () => {
+    if (!debouncedSubject.trim() || !debouncedHtml.trim()) {
+      notify('err', 'מלאו נושא ו-HTML לפני הורדת PDF');
+      return;
+    }
+    setPdfLoading(true);
+    try {
+      const res = await settings.previewTemplatePdf(kind, debouncedSubject, debouncedHtml);
+      if (!res.ok || !res.data) {
+        notify('err', res.error || 'יצירת PDF נכשלה');
+        return;
+      }
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'מכתב-סגירה-דוגמה.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      notify('ok', 'ה-PDF הורד');
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [debouncedSubject, debouncedHtml, kind, settings, notify]);
 
   // Lock body scroll while fullscreen.
   useEffect(() => {
@@ -409,6 +436,9 @@ export default function LetterStudio({ settings, notify }: Props) {
               empty={!preview && !previewLoading}
               device={device}
               onDeviceChange={setDevice}
+              onDownloadPdf={() => void downloadPdf()}
+              pdfLoading={pdfLoading}
+              pdfDisabled={!preview || previewLoading}
             />
           </div>
         ) : (

@@ -58,14 +58,14 @@ That becomes the email’s subject line in the recipient’s inbox.
 | Inquiry | `{{subject}}` | Inquiry subject |
 | | `{{description}}` | Full description |
 | | `{{category}}` | Category (localized label) |
-| | `{{form_timestamp}}` | Form submission timestamp |
+| | `{{form_timestamp}}` | Form submission date only — Hebrew long form, e.g. `1 ביוני 2026` (time stripped if present) |
 | | `{{grade_level}}` | Grade level |
 | | `{{class_name}}` | Class |
 | | `{{department}}` | Department |
 | Handling | `{{justification_label}}` | Justified / not justified (Hebrew label) |
 | | `{{manager_response}}` | Manager response text |
 | | `{{team_response}}` | Team response text |
-| | `{{closed_at}}` | Close date/time (`he-IL`, `Asia/Jerusalem`) |
+| | `{{closed_at}}` | Close date only — Hebrew long form, e.g. `9 ביוני 2026` (no time) |
 | | `{{assigned_group}}` | Assigned group (localized label) |
 | Sender | `{{from_name}}` | Display name from email settings |
 
@@ -192,6 +192,10 @@ When a manager submits a closing response, the system sends one email with:
 The email subject still comes from your **subject** template (e.g. `סגירת פנייה: {{subject}}`).
 
 PDF generation uses headless Chromium (`puppeteer`). On Linux servers, install Chromium if needed and set `PUPPETEER_EXECUTABLE_PATH` (see README troubleshooting).
+
+**Multi-page letters** — Long `{{manager_response}}` text flows to additional A4 pages automatically. The letterhead stays on page 1; the signature and footer stay together on the last page. Page margins are identical on every page (`@page` in the default template).
+
+**Preview PDF** — In the editor, switch to **Preview** and click **הורדת PDF** to download the same PDF attachment that would be sent to the submitter (sample data, current template).
 
 ---
 
