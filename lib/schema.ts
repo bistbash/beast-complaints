@@ -122,10 +122,10 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
   // will auto-populate these values without us needing to touch them.
   await pool.query(`
     ALTER TABLE ${t}
-      ADD COLUMN IF NOT EXISTS inquiry_id            uuid        DEFAULT gen_random_uuid(),
-      ADD COLUMN IF NOT EXISTS status                text        DEFAULT 'new',
-      ADD COLUMN IF NOT EXISTS priority              text        DEFAULT 'medium',
-      ADD COLUMN IF NOT EXISTS created_at            timestamptz DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS inquiry_id            uuid,
+      ADD COLUMN IF NOT EXISTS status                text,
+      ADD COLUMN IF NOT EXISTS priority              text,
+      ADD COLUMN IF NOT EXISTS created_at            timestamptz,
       ADD COLUMN IF NOT EXISTS routed_at             timestamptz,
       ADD COLUMN IF NOT EXISTS routed_by             text,
       ADD COLUMN IF NOT EXISTS assigned_group        text,
@@ -140,20 +140,47 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
       ADD COLUMN IF NOT EXISTS justification_at      timestamptz,
       ADD COLUMN IF NOT EXISTS justification_by      text,
       ADD COLUMN IF NOT EXISTS closed_at             timestamptz,
-      ADD COLUMN IF NOT EXISTS last_activity_at      timestamptz DEFAULT NOW(),
-      ADD COLUMN IF NOT EXISTS due_at                timestamptz DEFAULT (NOW() + INTERVAL '72 hours'),
+      ADD COLUMN IF NOT EXISTS last_activity_at      timestamptz,
+      ADD COLUMN IF NOT EXISTS due_at                timestamptz,
       ADD COLUMN IF NOT EXISTS closing_email_sent_at timestamptz,
       ADD COLUMN IF NOT EXISTS legacy_id             text
   `);
 
-  // Defensive backfill (Postgres should fill DEFAULTs on ADD COLUMN, but just in case):
+  // ADD COLUMN IF NOT EXISTS does not add DEFAULTs when the column already exists
+  // (e.g. columns created manually or by an older migration). db-smart sync INSERTs
+  // only the 14 sheet columns — without defaults, new rows stay invisible in the app.
+  await pool.query(`
+    ALTER TABLE ${t}
+      ALTER COLUMN inquiry_id            SET DEFAULT gen_random_uuid(),
+      ALTER COLUMN status                SET DEFAULT 'new',
+      ALTER COLUMN priority              SET DEFAULT 'medium',
+      ALTER COLUMN created_at            SET DEFAULT NOW(),
+      ALTER COLUMN last_activity_at      SET DEFAULT NOW(),
+      ALTER COLUMN due_at                SET DEFAULT (NOW() + INTERVAL '72 hours')
+  `);
+
+  // Backfill sheet-synced rows that arrived before defaults were in place.
   await pool.query(`
     UPDATE ${t}
-       SET inquiry_id       = COALESCE(inquiry_id, gen_random_uuid()),
-           status           = COALESCE(status, 'new'),
-           priority         = COALESCE(priority, 'medium'),
-           last_activity_at = COALESCE(last_activity_at, NOW())
-     WHERE inquiry_id IS NULL OR status IS NULL OR priority IS NULL OR last_activity_at IS NULL
+       SET inquiry_id = COALESCE(inquiry_id, gen_random_uuid()),
+           status = COALESCE(status, 'new'),
+           priority = COALESCE(priority, 'medium'),
+           created_at = COALESCE(
+             created_at,
+             CASE
+               WHEN "timestamp" ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4} [0-9]{1,2}:[0-9]{2}:[0-9]{2}$'
+                 THEN to_timestamp("timestamp", 'DD/MM/YYYY HH24:MI:SS')
+               ELSE NOW()
+             END
+           ),
+           last_activity_at = COALESCE(last_activity_at, NOW()),
+           due_at = COALESCE(due_at, NOW() + INTERVAL '72 hours')
+     WHERE inquiry_id IS NULL
+        OR status IS NULL
+        OR priority IS NULL
+        OR created_at IS NULL
+        OR last_activity_at IS NULL
+        OR due_at IS NULL
   `);
 
   // Re-derive created_at from the Google Form "timestamp" text for rows that
