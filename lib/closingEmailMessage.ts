@@ -25,13 +25,18 @@ export function buildClosingEmailCoverLetter(
 בברכה,
 ${ctx.from_name}`;
 
+  // Gmail (and others) strip <html>/<body>, dropping dir="rtl" set there — so the
+  // RTL direction must live on a wrapping div and on each <p>, inline.
+  const pStyle = 'direction:rtl;text-align:right;margin:0 0 1em;';
   const html = `<!DOCTYPE html>
 <html lang="he" dir="rtl">
 <head><meta charset="UTF-8"></head>
-<body style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1e293b;">
-  <p>שלום <strong>${escapeHtml(name)}</strong>,</p>
-  <p>מצורף מכתב סיכום לפנייתך בנושא &quot;${escapeHtml(subject)}&quot;.</p>
-  <p style="margin-top:1.25em;">בברכה,<br><strong>${escapeHtml(ctx.from_name)}</strong></p>
+<body style="margin:0;">
+  <div dir="rtl" style="direction:rtl;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1e293b;">
+    <p dir="rtl" style="${pStyle}">שלום <strong>${escapeHtml(name)}</strong>,</p>
+    <p dir="rtl" style="${pStyle}">מצורף מכתב סיכום לפנייתך בנושא &quot;${escapeHtml(subject)}&quot;.</p>
+    <p dir="rtl" style="direction:rtl;text-align:right;margin:1.25em 0 0;">בברכה,<br><strong>${escapeHtml(ctx.from_name)}</strong></p>
+  </div>
 </body>
 </html>`;
 
