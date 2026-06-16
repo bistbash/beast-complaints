@@ -38,13 +38,31 @@ ${ctx.from_name}`;
   return { text, html };
 }
 
+/** DD-MM-YYYY in Asia/Jerusalem (falls back to today when no date). */
+function formatFileDate(value: string | Date | null | undefined): string {
+  const d = value ? new Date(value) : new Date();
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jerusalem',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value || '';
+  return `${get('day')}-${get('month')}-${get('year')}`;
+}
+
+/** e.g. "מכתב סגירה - ישראל ישראלי - 16-06-2026.pdf" */
 export function closingLetterPdfFilename(inquiry: InquiryRow): string {
-  const base = (inquiry.subject || 'פנייה')
+  const name = (inquiry.submitter_name || '')
     .trim()
+    .replace(/[\\/:*?"<>|]/g, '') // strip filesystem-illegal characters
+    .replace(/\s+/g, ' ')
     .slice(0, 60)
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-  return base ? `מכתב-סגירה-${base}.pdf` : 'מכתב-סגירה.pdf';
+    .trim();
+  const date = formatFileDate(inquiry.closed_at);
+  const parts = ['מכתב סגירה'];
+  if (name) parts.push(name);
+  if (date) parts.push(date);
+  return `${parts.join(' - ')}.pdf`;
 }

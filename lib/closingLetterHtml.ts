@@ -1,6 +1,14 @@
 import type { JustificationDecision } from './constants.ts';
 
-/** Formal A4 closing letter — optimized for Puppeteer PDF (print backgrounds on). */
+/**
+ * Formal IDF-style closing letter (חיל האוויר / בח"א 21 letterhead) — optimized
+ * for Puppeteer PDF (print backgrounds on). Layout mirrors the official
+ * "מסמך אזרחי" format: "בלמ"ס" classification top & bottom, a unit-identification
+ * block beside the emblem, a centered underlined "הנדון:" subject line, then body.
+ *
+ * Structure note: keep the .sheet / .sheet-main / .sheet-bottom classes — the
+ * PDF footer-pinning in letterLayoutFix.ts depends on them.
+ */
 export function institutionalClosingLetterHtml(kind: JustificationDecision): string {
   const isJustified = kind === 'justified';
 
@@ -48,9 +56,10 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
   /* סולם טיפוגרפי אחיד למכתב רשמי */
   :root {
-    --fs-title: 14pt;   /* כותרת ראשית — letterhead, כותרת המכתב */
-    --fs-body: 12pt;    /* גוף, תת-כותרת, כותרות משנה, פרטי מכתב */
-    --fs-small: 10pt;   /* פוטר, פרטי קשר, תוויות בטבלה */
+    --fs-title: 14pt;
+    --fs-body: 12pt;
+    --fs-small: 10pt;
+    --fs-tiny: 9pt;
     --lh: 1.55;
   }
 
@@ -76,9 +85,12 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     position: relative;
     box-sizing: border-box;
   }
-  .sheet-main { padding-bottom: 48mm; }
+  /* Footer flows naturally for multi-page letters; for single-page letters the
+     JS (pushLetterFooterToPageBottom) pins it to the physical page bottom. */
+  .sheet-main { padding-bottom: 0; }
   .sheet-bottom {
-    position: absolute;
+    position: static;
+    margin-top: 18pt;
     left: 20mm;
     right: 20mm;
     bottom: 10mm;
@@ -86,163 +98,91 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
   @media screen {
     body { background: #e3e6ea; padding: 24px 16px; }
-    .sheet {
-      box-shadow: 0 1px 4px rgba(0,0,0,0.16), 0 8px 28px rgba(0,0,0,0.1);
-    }
+    .sheet { box-shadow: 0 1px 4px rgba(0,0,0,0.16), 0 8px 28px rgba(0,0,0,0.1); }
   }
 
-  /* הדפסה / PDF — מיקום סופי נקבע ב-htmlToPdf; כאן רק זרימה רב-עמודית */
   @media print {
     body { background: #fff; padding: 0; }
+    .sheet { width: auto; margin: 0; box-shadow: none; }
 
-    .sheet {
-      width: auto;
-      margin: 0;
-      box-shadow: none;
-    }
-
-    /* לא לפצל כותרת עליונה / כותרת מכתב בין עמודים */
-    .opening,
-    .opening-frame,
-    .doc-head {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    /* כותרת "התייחסות הנהלה" נשארת עם תחילת הטקסט */
-    .response-heading {
-      break-after: avoid;
-      page-break-after: avoid;
-    }
-
-    /* התייחסות ארוכה — ממשיכה לעמוד הבא */
+    .classif-top,
+    .letterhead,
+    .subject-line { break-inside: avoid; page-break-inside: avoid; }
+    .response-heading { break-after: avoid; page-break-after: avoid; }
     .response-section,
     .response-text,
-    .p {
-      break-inside: auto;
-      page-break-inside: auto;
-      orphans: 3;
-      widows: 3;
-    }
-
-    /* סיום, חתימה ופוטר — בלוק אחד בתחתית העמוד */
+    .p { break-inside: auto; page-break-inside: auto; orphans: 3; widows: 3; }
     .sheet-bottom,
-    .closing-block {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .signature {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
-
-    .footer-rule { margin-top: 16pt; }
+    .closing-block,
+    .signature { break-inside: avoid; page-break-inside: avoid; }
   }
 
-  /* ── פתיחה: letterhead רשמי ── */
-  .opening { margin-bottom: 22pt; }
+  /* ── סיווג "בלמ"ס" ── */
+  .classif-top {
+    text-align: center;
+    font-size: var(--fs-small);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 10pt;
+  }
+  .classif-bottom {
+    text-align: center;
+    font-size: var(--fs-small);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-top: 10pt;
+  }
 
-  .opening-frame {
-    border: 1pt solid #000;
-    padding: 0;
-  }
-  .opening-frame-top {
-    border-bottom: 1pt solid #000;
-    padding: 14pt 16pt 12pt;
-  }
-  .letterhead-table {
+  /* ── letterhead: בלוק זיהוי יחידה (שמאל) + סמל (ימין) ── */
+  .letterhead {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
+    margin-bottom: 20pt;
   }
-  .letterhead-table td { vertical-align: middle; }
-  .lh-logo {
-    width: 88px;
-    text-align: center;
-    padding-left: 4pt;
-  }
-  .lh-logo img {
-    width: 76px;
+  .letterhead td { vertical-align: top; }
+
+  .lh-emblem { width: 30%; text-align: right; padding-top: 2pt; vertical-align: top; }
+  .lh-emblem img {
+    width: 92px;
     height: auto;
-    display: block;
-    margin: 0 auto;
+    display: inline-block;
   }
-  .lh-center { text-align: center; padding: 0 8pt; }
-  .lh-org {
-    font-size: var(--fs-title);
-    font-weight: 700;
-    line-height: var(--lh);
-    letter-spacing: 0.01em;
-  }
-  .lh-contact {
-    font-size: var(--fs-small);
-    margin-top: 6pt;
-    color: #333;
-    line-height: var(--lh);
-  }
-  .lh-spacer { width: 88px; }
 
-  /* פרטי מכתב */
-  .ref-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: var(--fs-body);
-  }
-  .ref-table th,
-  .ref-table td {
-    border: 1pt solid #000;
-    padding: 7pt 10pt;
+  .lh-unit { width: 70%; text-align: left; vertical-align: top; }
+  .unit-table { display: inline-block; text-align: right; border-collapse: collapse; font-size: var(--fs-body); }
+  .unit-table td {
+    padding: 1.5pt 0;
     vertical-align: top;
-    text-align: right;
+    line-height: 1.4;
   }
-  .ref-table th {
-    width: 22%;
-    font-size: var(--fs-small);
+  .unit-table .u-label {
     font-weight: 700;
-    background: #f5f5f5;
-    letter-spacing: 0.04em;
-  }
-  .ref-table .ref-val { font-weight: 600; }
-
-  /* כותרת המכתב */
-  .doc-head {
-    text-align: center;
-    margin: 24pt 0 22pt;
-  }
-  .doc-head-rule {
-    display: table;
-    width: 72%;
-    margin: 0 auto 10pt;
-    table-layout: fixed;
-  }
-  .doc-head-rule td { vertical-align: middle; }
-  .doc-head-line {
-    border: none;
-    border-top: 0.75pt solid #000;
-    height: 1px;
-  }
-  .doc-title {
-    font-size: var(--fs-title);
-    font-weight: 700;
-    padding: 0 12pt;
     white-space: nowrap;
-    letter-spacing: 0.03em;
-    line-height: var(--lh);
+    padding-left: 14pt;
   }
-  .doc-subtitle {
-    font-size: var(--fs-body);
-    color: #222;
-    margin-top: 4pt;
-    line-height: var(--lh);
+  .unit-table .u-val { font-weight: 400; }
+  .unit-date {
+    margin-top: 8pt;
+    font-weight: 400;
+    letter-spacing: 0.08em;
   }
 
-  /* פתיחת גוף */
-  .body-open { margin-top: 4pt; }
-  .addressee {
-    margin-bottom: 14pt;
-    padding-right: 2pt;
+  /* ── כותרת "הנדון:" ── */
+  .subject-line {
+    text-align: center;
+    font-size: var(--fs-body);
+    font-weight: 700;
+    margin: 16pt 0 22pt;
   }
+  .subject-line .subj-text {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ── גוף ── */
+  .body-open { margin-top: 4pt; }
+  .addressee { margin-bottom: 12pt; padding-right: 2pt; }
   .addressee-lbl { font-weight: 400; }
   .addressee-name { font-weight: 700; }
   .salute { margin-bottom: 14pt !important; font-weight: 600; }
@@ -269,47 +209,26 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   .closing-block { margin-top: 0; }
   .closing-block .p:last-of-type { margin-bottom: 0; }
 
-  /* חתימה — חתימה ידנית (נכס signature) + שם ותפקיד מתחת */
-  .signature {
-    margin-top: 12pt;
-    text-align: right;
-  }
-  .signature .sign-off {
-    margin: 0 0 14pt !important;
-    font-weight: 700;
-  }
-  .sig-block {
-    display: inline-block;
-    text-align: right;
-    min-width: 160px;
-    max-width: 220px;
-  }
+  /* חתימה */
+  .signature { margin-top: 12pt; text-align: right; }
+  .signature .sign-off { margin: 0 0 12pt !important; font-weight: 700; }
+  .sig-block { display: inline-block; text-align: right; min-width: 160px; max-width: 220px; }
   .sig-hand {
     display: block;
     width: 120px;
     max-height: 44pt;
     height: auto;
-    margin: 0 0 0 0;
     object-fit: contain;
     object-position: right bottom;
   }
-  .sig-name {
-    font-weight: 700;
-    margin-top: 2pt;
-    padding-top: 2pt;
-    border-top: 0.5pt solid #ccc;
-  }
-  .sig-role {
-    font-size: var(--fs-small);
-    margin-top: 2pt;
-    line-height: var(--lh);
-  }
+  .sig-name { font-weight: 700; margin-top: 2pt; padding-top: 2pt; border-top: 0.5pt solid #ccc; }
+  .sig-role { font-size: var(--fs-small); margin-top: 2pt; line-height: var(--lh); }
 
   /* תחתית — קו מפריד ופרטי קשר */
-  .footer-rule { border: none; border-top: 1pt solid #000; margin: 20pt 0 8pt; }
+  .footer-rule { border: none; border-top: 1pt solid #000; margin: 16pt 0 6pt; }
   .footer {
     text-align: center;
-    font-size: var(--fs-small);
+    font-size: var(--fs-tiny);
     line-height: var(--lh);
     color: #222;
   }
@@ -321,63 +240,45 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   <div class="sheet">
     <div class="sheet-main">
 
-    <header class="opening">
-      <div class="opening-frame">
-        <div class="opening-frame-top">
-          <table class="letterhead-table" role="presentation">
-            <tr>
-              <td class="lh-logo">
-                <img src="{{asset_logo}}" alt="לוגו המכללה" />
-              </td>
-              <td class="lh-center">
-                <div class="lh-org">המכללה הטכנולוגית של חיל האוויר באר שבע</div>
-                <div class="lh-contact">
-                  דרך אילן רמון 1 &nbsp;|&nbsp; טלפון 08-9907410/2 &nbsp;|&nbsp; פקס 08-9907411/02
-                </div>
-              </td>
-              <td class="lh-spacer" aria-hidden="true"></td>
-            </tr>
-          </table>
-        </div>
-        <table class="ref-table">
-          <tr>
-            <th scope="row">תאריך</th>
-            <td class="ref-val">{{closed_at}}</td>
-            <th scope="row">הנדון</th>
-            <td class="ref-val">{{subject}}</td>
-          </tr>
-        </table>
-      </div>
-    </header>
+      <div class="classif-top">בלמ"ס</div>
 
-    <div class="doc-head">
-      <table class="doc-head-rule" role="presentation">
+      <table class="letterhead" role="presentation">
         <tr>
-          <td class="doc-head-line"></td>
-          <td class="doc-title">תגובה לפנייתך</td>
-          <td class="doc-head-line"></td>
+          <td class="lh-emblem">
+            <img src="{{asset_logo}}" alt="סמל המכללה הטכנולוגית של חיל האוויר" />
+          </td>
+          <td class="lh-unit">
+            <table class="unit-table" role="presentation">
+              <tr><td class="u-label">חיל</td><td class="u-val">האוויר</td></tr>
+              <tr><td class="u-label">בח"א</td><td class="u-val">21</td></tr>
+              <tr><td class="u-label">טייסת</td><td class="u-val">ביס"ט ב"ש</td></tr>
+              <tr><td class="u-label">גף</td><td class="u-val">מנהלה</td></tr>
+              <tr><td class="u-label">סימוכין</td><td class="u-val">&nbsp;</td></tr>
+            </table>
+            <div class="unit-date">{{closed_at}}</div>
+          </td>
         </tr>
       </table>
-      <div class="doc-subtitle">בנושא: {{subject}}</div>
-    </div>
 
-    <div class="body-open">
-      <p class="addressee"><span class="addressee-lbl">לכבוד </span><span class="addressee-name">{{submitter_name}}</span>,</p>
-      <p class="p salute">שלום רב,</p>
-    </div>
+      <div class="subject-line">הנדון: <span class="subj-text">מענה לפנייתך בנושא &#x201C;{{subject}}&#x201D;</span></div>
 
-    <p class="p">
-      תודה על פנייתך מיום {{form_timestamp}} בנושא
-      &#x201C;{{subject}}&#x201D;. אנו מעריכים את הזמן והמאמץ שהקדשת לשיתוף אותנו,
-      ורואים בפניות ההורים והתלמידים חלק חשוב בשיפור השירות וההתנהלות במוסדנו.
-    </p>
+      <div class="body-open">
+        <p class="addressee"><span class="addressee-lbl">לכבוד </span><span class="addressee-name">{{submitter_name}}</span>,</p>
+        <p class="p salute">שלום רב,</p>
+      </div>
 
-    ${bodyMid}
+      <p class="p">
+        תודה על פנייתך מיום {{form_timestamp}} בנושא
+        &#x201C;{{subject}}&#x201D;. אנו מעריכים את הזמן והמאמץ שהקדשת לשיתוף אותנו,
+        ורואים בפניות ההורים והתלמידים חלק חשוב בשיפור השירות וההתנהלות במוסדנו.
+      </p>
 
-    <div class="response-section">
-      <div class="response-heading">התייחסות הנהלה</div>
-      <div class="response-text">{{manager_response}}</div>
-    </div>
+      ${bodyMid}
+
+      <div class="response-section">
+        <div class="response-heading">התייחסות הנהלה</div>
+        <div class="response-text">{{manager_response}}</div>
+      </div>
 
     </div><!-- /.sheet-main -->
 
@@ -404,6 +305,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
           <a href="mailto:technibeersheva@gmail.com">technibeersheva@gmail.com</a>
         </div>
       </div>
+
+      <div class="classif-bottom">בלמ"ס</div>
     </div>
 
   </div><!-- /.sheet -->
