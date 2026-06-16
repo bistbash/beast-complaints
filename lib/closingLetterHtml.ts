@@ -56,11 +56,11 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
   /* סולם טיפוגרפי אחיד למכתב רשמי */
   :root {
-    --fs-title: 14pt;
-    --fs-body: 12pt;
-    --fs-small: 10pt;
-    --fs-tiny: 9pt;
-    --lh: 1.55;
+    --fs-title: 13pt;
+    --fs-body: 11pt;
+    --fs-small: 9.5pt;
+    --fs-tiny: 8.5pt;
+    --lh: 1.45;
   }
 
   html, body {
@@ -113,7 +113,6 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     .response-text,
     .p { break-inside: auto; page-break-inside: auto; orphans: 3; widows: 3; }
     .sheet-bottom,
-    .closing-block,
     .signature { break-inside: avoid; page-break-inside: avoid; }
   }
 
@@ -173,8 +172,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   .addressee { margin-bottom: 12pt; padding-right: 2pt; }
   .addressee-lbl { font-weight: 400; }
   .addressee-name { font-weight: 700; }
-  .salute { margin-bottom: 14pt !important; font-weight: 600; }
-  .p { margin-bottom: 12pt; text-align: justify; }
+  .salute { margin-bottom: 12pt !important; font-weight: 600; }
+  .p { margin-bottom: 10pt; text-align: justify; }
 
   /* התייחסות הנהלה */
   .response-section { margin: 4pt 0 20pt; }
@@ -268,9 +267,6 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
         <div class="response-text">{{manager_response}}</div>
       </div>
 
-    </div><!-- /.sheet-main -->
-
-    <div class="sheet-bottom">
       <div class="closing-block">
         ${bodyClose}
 
@@ -282,8 +278,11 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
             <div class="sig-role">מנהל ביה&#x201C;ס</div>
           </div>
         </div>
-      </div>
+      </div><!-- /.closing-block -->
 
+    </div><!-- /.sheet-main -->
+
+    <div class="sheet-bottom">
       <hr class="footer-rule" />
       <div class="footer">
         <div class="footer-org">המכללה הטכנולוגית של חיל האוויר באר שבע</div>

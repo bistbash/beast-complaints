@@ -11,7 +11,7 @@ const PIN_BOTTOM_RULES = `
     width: 210mm !important;
     margin: 0 auto !important;
   }
-  .sheet-main { padding-bottom: 48mm !important; }
+  .sheet-main { padding-bottom: 24mm !important; }
   .sheet-bottom {
     position: absolute !important;
     left: 20mm !important;
