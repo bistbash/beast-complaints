@@ -224,7 +224,7 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | `missing_refresh_token` | נתקו ב-Google Account → חיבור מחדש; OAuth משתמש ב-`prompt=consent`. |
 | `insufficient_scopes` / Request had insufficient authentication scopes | החיבור דורש `gmail.send` + `userinfo.email`. הסירו גישה לאפליקציה ב-[Google Account](https://myaccount.google.com/permissions) וחברו מחדש. ודאו ש-Gmail API מופעל בפרויקט Cloud. |
 | מייל סגירה לא נשלח | ודאו שמירת הגדרות Google + חיבור Gmail בטאב ניהול. |
-| `pdf_failed` בלוג | נדרש Chromium ליצירת PDF (מגיע עם `puppeteer` ב-`npm install`). ב-Linux: `pacman -S chromium` והגדירו `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium` אם צריך. |
+| `pdf_failed` בלוג / "יצירת קובץ ה-PDF נכשלה" | נדרש Chromium ליצירת ה-PDF. ה-Docker image (Alpine) כבר מתקין `chromium` + פונטים עבריים ומגדיר `PUPPETEER_EXECUTABLE_PATH`. אם פרסת מ-image ישן — בנה מחדש (`docker compose build --no-cache` / rebuild ב-Portainer). מחוץ ל-Docker: התקן chromium (`apk add chromium` / `apt install chromium`) והגדר `PUPPETEER_EXECUTABLE_PATH`. לאחר שהתיקון פעיל, לחץ **"שלח מייל סגירה"** בפנייה שכבר נסגרה כדי לשלוח שוב. |
 | שינוי מפתח הצפנה נכשל | נתקו קודם את חשבון Gmail, שנהו מפתח, שמרו, והתחברו מחדש. |
 
 ---
