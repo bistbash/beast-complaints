@@ -135,16 +135,16 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   .letterhead td { vertical-align: top; }
 
   /* לוגו משולב (חיל האוויר + ביה"ס) — בד"כ רחב; מתאים ליחס שלו עם max-width/height */
-  .lh-emblem { width: 42%; text-align: right; padding-top: 2pt; vertical-align: top; }
+  .lh-emblem { width: 48%; text-align: right; padding-top: 2pt; vertical-align: top; }
   .lh-emblem img {
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: 92px;
+    max-height: 116px;
     display: inline-block;
   }
 
-  .lh-unit { width: 58%; text-align: left; vertical-align: top; }
+  .lh-unit { width: 52%; text-align: left; vertical-align: top; }
   .unit-table { display: inline-block; text-align: right; border-collapse: collapse; font-size: var(--fs-body); }
   .unit-table td {
     padding: 1.5pt 0;
