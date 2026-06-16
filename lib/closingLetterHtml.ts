@@ -67,7 +67,7 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     color: #000;
     direction: rtl;
     text-align: right;
-    font-family: 'David', 'David Libre', 'Times New Roman', 'Liberation Serif', serif;
+    font-family: Arial, 'Liberation Sans', Arimo, 'Noto Sans Hebrew', Helvetica, sans-serif;
     font-size: var(--fs-body);
     line-height: var(--lh);
     -webkit-print-color-adjust: exact;
@@ -125,13 +125,6 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     letter-spacing: 0.06em;
     margin-bottom: 10pt;
   }
-  .classif-bottom {
-    text-align: center;
-    font-size: var(--fs-small);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    margin-top: 10pt;
-  }
 
   /* ── letterhead: בלוק זיהוי יחידה (שמאל) + סמל (ימין) ── */
   .letterhead {
@@ -142,14 +135,14 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   }
   .letterhead td { vertical-align: top; }
 
-  .lh-emblem { width: 30%; text-align: right; padding-top: 2pt; vertical-align: top; }
+  .lh-emblem { width: 36%; text-align: right; padding-top: 2pt; vertical-align: top; }
   .lh-emblem img {
-    width: 92px;
+    width: 122px;
     height: auto;
     display: inline-block;
   }
 
-  .lh-unit { width: 70%; text-align: left; vertical-align: top; }
+  .lh-unit { width: 64%; text-align: left; vertical-align: top; }
   .unit-table { display: inline-block; text-align: right; border-collapse: collapse; font-size: var(--fs-body); }
   .unit-table td {
     padding: 1.5pt 0;
@@ -162,11 +155,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     padding-left: 14pt;
   }
   .unit-table .u-val { font-weight: 400; }
-  .unit-date {
-    margin-top: 8pt;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-  }
+  /* תאריך בשורה נפרדת מתחת לסימוכין, עם רווח מפריד */
+  .unit-table .unit-date-row td { padding-top: 9pt; }
 
   /* ── כותרת "הנדון:" ── */
   .subject-line {
@@ -254,8 +244,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
               <tr><td class="u-label">טייסת</td><td class="u-val">ביס"ט ב"ש</td></tr>
               <tr><td class="u-label">גף</td><td class="u-val">מנהלה</td></tr>
               <tr><td class="u-label">סימוכין</td><td class="u-val">&nbsp;</td></tr>
+              <tr class="unit-date-row"><td class="u-label">תאריך</td><td class="u-val">{{closed_at}}</td></tr>
             </table>
-            <div class="unit-date">{{closed_at}}</div>
           </td>
         </tr>
       </table>
@@ -305,8 +295,6 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
           <a href="mailto:technibeersheva@gmail.com">technibeersheva@gmail.com</a>
         </div>
       </div>
-
-      <div class="classif-bottom">בלמ"ס</div>
     </div>
 
   </div><!-- /.sheet -->
