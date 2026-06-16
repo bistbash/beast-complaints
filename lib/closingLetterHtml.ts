@@ -273,7 +273,7 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
         <div class="signature">
           <p class="sign-off">בכבוד רב,</p>
           <div class="sig-block">
-            <img class="sig-hand" src="{{asset_signature}}" alt="חתימת מנהל ביה&#x201C;ס" />
+            <img class="sig-hand" src="{{asset_signature_2}}" alt="חתימת מנהל ביה&#x201C;ס" />
             <div class="sig-name">קובי דוידסון אל&#x201C;מ/מ&#x27;</div>
             <div class="sig-role">מנהל ביה&#x201C;ס</div>
           </div>

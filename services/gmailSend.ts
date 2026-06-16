@@ -27,9 +27,17 @@ function encodeSubject(subject: string): string {
 }
 
 function encodeAttachmentFilename(filename: string): string {
-  const ascii = filename.replace(/[^\x20-\x7E]/g, '_') || 'attachment';
-  const encoded = encodeURIComponent(filename);
-  return `filename="${ascii}"; filename*=UTF-8''${encoded}`;
+  // Pure-ASCII names need no encoding.
+  if (!/[^\x20-\x7E]/.test(filename)) {
+    return `filename="${filename.replace(/"/g, '')}"`;
+  }
+  // Hebrew/non-ASCII: put an RFC 2047 encoded-word in `filename` (Gmail, Outlook
+  // and Apple Mail decode this and often ignore `filename*`), and keep the
+  // RFC 6266 `filename*` for strict clients. The previous ASCII fallback turned
+  // every Hebrew character into "_" in Gmail.
+  const rfc2047 = `=?UTF-8?B?${Buffer.from(filename, 'utf8').toString('base64')}?=`;
+  const rfc2231 = encodeURIComponent(filename);
+  return `filename="${rfc2047}"; filename*=UTF-8''${rfc2231}`;
 }
 
 function buildRawMime(input: {
