@@ -23,7 +23,8 @@ export function buildClosingEmailCoverLetter(
 מצורף מכתב סיכום לפנייתך בנושא "${subject}".
 
 בברכה,
-${ctx.from_name}`;
+מערכת פניות לקוח
+המכללה הטכנולוגית של חיל האוויר באר שבע`;
 
   // Gmail (and others) strip <html>/<body>, dropping dir="rtl" set there — so the
   // RTL direction must live on a wrapping div and on each <p>, inline.
@@ -35,7 +36,7 @@ ${ctx.from_name}`;
   <div dir="rtl" style="direction:rtl;text-align:right;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:#1e293b;">
     <p dir="rtl" style="${pStyle}">שלום <strong>${escapeHtml(name)}</strong>,</p>
     <p dir="rtl" style="${pStyle}">מצורף מכתב סיכום לפנייתך בנושא &quot;${escapeHtml(subject)}&quot;.</p>
-    <p dir="rtl" style="direction:rtl;text-align:right;margin:1.25em 0 0;">בברכה,<br><strong>${escapeHtml(ctx.from_name)}</strong></p>
+    <p dir="rtl" style="direction:rtl;text-align:right;margin:1.25em 0 0;">בברכה,<br><strong>מערכת פניות לקוח</strong><br>המכללה הטכנולוגית של חיל האוויר באר שבע</p>
   </div>
 </body>
 </html>`;

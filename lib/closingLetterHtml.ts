@@ -202,8 +202,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   .sig-block { display: inline-block; text-align: right; min-width: 160px; max-width: 220px; }
   .sig-hand {
     display: block;
-    width: 120px;
-    max-height: 44pt;
+    width: 156px;
+    max-height: 58pt;
     height: auto;
     object-fit: contain;
     object-position: right bottom;
