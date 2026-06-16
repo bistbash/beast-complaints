@@ -116,7 +116,7 @@ export default function ConversationsList({
               </svg>
             </div>
             <p className="text-sm font-medium">אין שיחות עדיין</p>
-            <p className="muted text-xs leading-relaxed">חפש לפי Display Name כדי להתחיל שיחה חדשה.</p>
+            <p className="muted text-xs leading-relaxed">חפש לפי שם כדי להתחיל שיחה חדשה.</p>
           </div>
         )}
 
@@ -204,7 +204,7 @@ export default function ConversationsList({
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold">{u.displayName}</div>
                         <div className="muted truncate text-[11px]">
-                          {u.email || 'Display Name'}
+                          {u.email || u.username}
                         </div>
                       </div>
                       <span className="flex-shrink-0 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">

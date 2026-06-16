@@ -11,6 +11,7 @@ import {
   targetGroups,
 } from '../middleware/auth.ts';
 import { configKeysForUserGroups, groupsMatch } from '../lib/groupKeys.ts';
+import { humanizeIdentifier } from '../lib/humanize.ts';
 import { loadDatasetMeta } from '../services/datasetMeta.ts';
 import {
   changePriority,
@@ -251,6 +252,9 @@ router.get('/', async (req, res, next) => {
     if (view === 'awaiting_team') {
       filter.status = STATUS.ROUTED;
     }
+    if (view === 'overdue') {
+      filter.overdue = true;
+    }
 
     if (view === 'mine_assigned') {
       filter.assignedUser = caps.email;
@@ -366,10 +370,10 @@ router.post('/:id/route', async (req, res, next) => {
         return;
       }
       finalGroup = match;
-      finalAssignedUserLabel = u.displayName || 'Display Name';
+      finalAssignedUserLabel = u.displayName || humanizeIdentifier(finalAssignedUser);
     } else if (finalAssignedUser) {
       const u = await findUser(finalAssignedUser);
-      finalAssignedUserLabel = u?.displayName || 'Display Name';
+      finalAssignedUserLabel = u?.displayName || humanizeIdentifier(finalAssignedUser);
     }
 
     if (!finalGroup) {
@@ -472,9 +476,14 @@ router.post('/:id/team-response', async (req, res, next) => {
     // Notify managers.
     void (async () => {
       try {
+        const envRoleKeys = (process.env.MANAGER_ROLE_KEYS || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
         const managers = await listManagers({
           adminGroup: process.env.ADMIN_GROUP || 'tichnun',
-          roleKeys: (process.env.MANAGER_ROLE_KEYS || '').split(',').map((s) => s.trim()).filter(Boolean) || DEFAULT_MANAGER_ROLE_KEYS,
+          // An empty array is truthy, so `|| DEFAULT` never fired — check length explicitly.
+          roleKeys: envRoleKeys.length ? envRoleKeys : DEFAULT_MANAGER_ROLE_KEYS,
         });
         await Promise.all(
           managers.map((m) =>
@@ -534,18 +543,64 @@ router.post('/:id/manager-response', async (req, res, next) => {
       caps.displayName,
     );
 
+    // Send the closing email synchronously so the manager gets immediate, accurate
+    // feedback (sent / failed + reason). The inquiry is already closed in the DB
+    // regardless of the email outcome — a failure here never blocks the close.
+    let email: { sent: boolean; reason?: string } | null = null;
     if (updated) {
-      void (async () => {
+      try {
         const result = await sendClosingEmail(updated);
         if (result.ok) {
           await markClosingEmailSent(meta, updated.inquiry_id);
+          email = { sent: true };
         } else {
+          email = { sent: false, reason: result.reason };
           console.warn('[beast-complaints] closing email skipped:', result.reason);
         }
-      })();
+      } catch (err) {
+        email = { sent: false, reason: 'send_failed' };
+        console.warn('[beast-complaints] closing email error:', err instanceof Error ? err.message : err);
+      }
     }
 
-    res.json({ inquiry: updated });
+    // Re-fetch so closing_email_sent_at is reflected in the returned row.
+    const finalInquiry = updated ? (await getInquiry(meta, req.params.id)) ?? updated : updated;
+    res.json({ inquiry: finalInquiry, email });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/resend-closing-email', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const meta = await requireDataset();
+    const caps = buildCapabilities(req.user);
+    if (!caps.isManager && !caps.isAdmin) {
+      res.status(403).json({ error: 'רק מנהל יכול לשלוח את מייל הסגירה' });
+      return;
+    }
+    const inquiry = await getInquiry(meta, req.params.id);
+    if (!inquiry) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
+    }
+    if (inquiry.status !== STATUS.CLOSED || !inquiry.manager_response) {
+      res.status(409).json({ error: 'ניתן לשלוח מייל סגירה רק לפנייה שנסגרה בהתייחסות מנהל' });
+      return;
+    }
+    const result = await sendClosingEmail(inquiry);
+    if (result.ok) {
+      await markClosingEmailSent(meta, inquiry.inquiry_id);
+    }
+    const finalInquiry = (await getInquiry(meta, req.params.id)) ?? inquiry;
+    res.json({
+      inquiry: finalInquiry,
+      email: result.ok ? { sent: true } : { sent: false, reason: result.reason },
+    });
   } catch (err) {
     next(err);
   }

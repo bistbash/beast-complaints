@@ -1,4 +1,4 @@
-import { formatDateTime, formatRelative } from '../../utils/format.ts';
+import { formatDateTime, formatRelative, humanizeIdentifier } from '../../utils/format.ts';
 import { HISTORY_LABELS, groupLabel } from '../../utils/constants.ts';
 
 interface HistoryRow {
@@ -22,7 +22,7 @@ export default function StatusTimeline({ history, displayNames = {} }: StatusTim
     <ol className="relative space-y-3 pr-4 pl-1">
       <div className="absolute right-1 top-1.5 bottom-1.5 w-px bg-neutral-200 dark:bg-neutral-800" aria-hidden />
       {history.map((h) => {
-        const name = displayNames[h.actor?.toLowerCase()] || 'Display Name';
+        const name = displayNames[h.actor?.toLowerCase()] || humanizeIdentifier(h.actor);
         const detailsStr = h.details && Object.keys(h.details).length
           ? Object.entries(h.details)
               .filter(([_, v]) => v !== null && v !== undefined && v !== '')
@@ -41,7 +41,7 @@ export default function StatusTimeline({ history, displayNames = {} }: StatusTim
                   k === 'from_group' || k === 'to_group'
                     ? groupLabel(String(v))
                     : k === 'assigned_user'
-                      ? displayNames[String(v).toLowerCase()] || 'Display Name'
+                      ? displayNames[String(v).toLowerCase()] || humanizeIdentifier(String(v))
                       : String(v);
                 return `${label}: ${value}`;
               })

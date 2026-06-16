@@ -96,6 +96,7 @@ export const HISTORY_LABELS: Record<string, string> = {
   reopened: 'הפנייה נפתחה מחדש',
   comment_added: 'נוספה תגובה',
   closing_email_sent: 'נשלח מייל סיום',
+  sla_breach: 'חריגה מיעד הטיפול (SLA)',
 };
 
 export const JUSTIFICATION = {

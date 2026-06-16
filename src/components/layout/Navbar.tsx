@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import Avatar from '../ui/Avatar.tsx';
 import ThemeToggle from '../ui/ThemeToggle.tsx';
 import type { Capabilities } from '../../hooks/useCapabilities.ts';
+import { humanizeIdentifier } from '../../utils/format.ts';
 
 interface NavbarProps {
   user: {
@@ -45,7 +46,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
   }, []);
 
   const visibleItems = NAV_ITEMS.filter((item) => item.show(capabilities));
-  const userLabel = user?.displayName || 'Display Name';
+  const userLabel = user?.displayName || humanizeIdentifier(user?.email || user?.username);
 
   return (
     <header className="sticky top-0 z-40 border-b border-subtle bg-surface/95 backdrop-blur">

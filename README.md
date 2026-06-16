@@ -168,6 +168,7 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 | POST   | `/api/inquiries/:id/route`                | ניתוב (group + assignedUser + routeToManager)  | navigator / admin / keva |
 | POST   | `/api/inquiries/:id/team-response`        | התייחסות צוות → awaiting_manager               | assignee / keva / navigator / admin |
 | POST   | `/api/inquiries/:id/manager-response`     | התייחסות מנהל + הצדקה → closed + מייל סגירה    | manager       |
+| POST   | `/api/inquiries/:id/resend-closing-email` | שליחה חוזרת של מייל הסגירה לפונה               | manager / admin |
 | POST   | `/api/inquiries/:id/justification`        | קביעת הצדקה (justified / unjustified) רטרואקטיבית | manager     |
 | POST   | `/api/inquiries/:id/reopen`               | פתיחה מחדש                                     | manager / admin |
 | POST   | `/api/inquiries/:id/priority`             | שינוי דחיפות                                   | router / manager |
@@ -243,8 +244,8 @@ Google Form ──▶ Google Sheet ──▶ db-smart sync ──▶ PostgreSQL 
 
 ## TODO / לא ממומש עדיין
 
-- [ ] **תזכורות SLA**: cron שמדגיש פניות שעוברות את ה-`due_at`.
-- [ ] **קוד split** של ה-bundle (כרגע ~545kB → ~152kB gzip).
+- [x] **תזכורות SLA**: scheduler מובנה שמתריע על פניות פתוחות שחרגו מ-`due_at` (ראה `SLA_REMINDER_INTERVAL_MINUTES`).
+- [x] **קוד split** של ה-bundle — מומש (lazy routes + ChatWidget; bundle ראשוני ~82kB gzip).
 
 ---
 

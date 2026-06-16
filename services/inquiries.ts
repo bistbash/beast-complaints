@@ -15,6 +15,7 @@ import {
 } from '../lib/constants.ts';
 import type { DatasetMeta, InquiryRow, MessageRow, HistoryRow } from '../lib/types.ts';
 import { INQUIRY_DEDUPE_ORDER, INQUIRY_DEDUPE_PARTITION, inquiryListOrderSql } from '../lib/inquiryDedupe.ts';
+import { humanizeIdentifier } from '../lib/humanize.ts';
 
 /**
  * Columns the db-smart sync populates from the Google Form (do not touch via INSERT/UPDATE).
@@ -106,6 +107,8 @@ interface ListInquiriesQuery {
   limit?: number;
   offset?: number;
   open?: boolean;
+  /** Only open inquiries whose SLA deadline (due_at) has already passed. */
+  overdue?: boolean;
   /** When provided, includes rows where assigned_user matches OR assigned_group is in user's groups. */
   inboxForUserEmail?: string;
   inboxForUserGroups?: string[];
@@ -129,6 +132,11 @@ export async function listInquiries(meta: DatasetMeta, query: ListInquiriesQuery
     where.push(`status IN ('new','routed','awaiting_manager')`);
   } else if (query.open === false) {
     where.push(`status IN ('closed')`);
+  }
+
+  if (query.overdue) {
+    where.push(`status IN ('new','routed','awaiting_manager')`);
+    where.push(`due_at IS NOT NULL AND due_at < NOW()`);
   }
 
   if (query.status) {
@@ -212,6 +220,7 @@ const WRITABLE_COLUMNS = new Set([
   'closing_email_sent_at',
   'last_activity_at',
   'due_at',
+  'sla_reminded_at',
 ]);
 
 async function patchInquiry(
@@ -281,9 +290,9 @@ export async function routeInquiry(
     input.routedBy,
     null,
     input.routeToManager
-      ? `הפנייה נותבה ישירות למנהל (קבוצה: ${groupLabelHe(input.group)}${input.assignedUser ? `, מטפל: ${input.assignedUserLabel || 'Display Name'}` : ''}).`
+      ? `הפנייה נותבה ישירות למנהל (קבוצה: ${groupLabelHe(input.group)}${input.assignedUser ? `, מטפל: ${input.assignedUserLabel || humanizeIdentifier(input.assignedUser)}` : ''}).`
       : input.assignedUser
-        ? `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}" ושויכה ל-${input.assignedUserLabel || 'Display Name'}.`
+        ? `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}" ושויכה ל-${input.assignedUserLabel || humanizeIdentifier(input.assignedUser)}.`
         : `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}".`,
     MESSAGE_TYPE.ROUTING,
   );
@@ -379,6 +388,8 @@ export async function reopenInquiry(
     status: STATUS.AWAITING_MANAGER,
     closed_at: null,
     closing_email_sent_at: null,
+    // Let the SLA sweep re-evaluate this now-active inquiry.
+    sla_reminded_at: null,
   });
   await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.REOPENED, { note });
   if (note) await postMessage(pool, inquiryId, actorEmail, null, note, MESSAGE_TYPE.STATUS_CHANGE);
@@ -395,7 +406,13 @@ export async function changePriority(
   if (!previous) return null;
   const created = new Date(previous.created_at);
   const due = computeDueAt(priority, created);
-  const updated = await patchInquiry(meta, inquiryId, { priority, due_at: due.toISOString() });
+  // due_at moved → clear the reminder flag so a new breach against the new
+  // deadline can alert again.
+  const updated = await patchInquiry(meta, inquiryId, {
+    priority,
+    due_at: due.toISOString(),
+    sla_reminded_at: null,
+  });
   await logHistory(pool, inquiryId, actor, HISTORY_ACTION.PRIORITY_CHANGED, {
     from: previous.priority,
     to: priority,

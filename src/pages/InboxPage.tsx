@@ -16,7 +16,7 @@ const EMPTY_FILTERS: FilterValues = { search: '', status: '', priority: '', grou
  * - `unrouted`         : inquiries waiting for the navigator (status = new)
  * - `awaiting_manager` : inquiries waiting for a manager response
  */
-type Scope = 'all' | 'mine_assigned' | 'unrouted' | 'awaiting_manager';
+type Scope = 'all' | 'mine_assigned' | 'unrouted' | 'awaiting_manager' | 'overdue';
 
 interface InboxPageProps {
   /** "inbox" = open inquiries (with scope tabs). "closed" = closed inquiries. */
@@ -41,6 +41,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
     mine_assigned: 0,
     unrouted: 0,
     awaiting_manager: 0,
+    overdue: 0,
   });
 
   const scope: Scope = (params.get('scope') as Scope) || 'all';
@@ -76,6 +77,8 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       q.view = 'unrouted';
     } else if (scope === 'awaiting_manager') {
       q.view = 'awaiting_manager';
+    } else if (scope === 'overdue') {
+      q.view = 'overdue';
     } else {
       q.view = 'open';
     }
@@ -116,6 +119,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
     const queries: Array<[Scope, Record<string, string>]> = [
       ['all', { view: 'open' }],
       ['mine_assigned', { view: 'mine_assigned' }],
+      ['overdue', { view: 'overdue' }],
     ];
     if (capabilities?.canRoute) queries.push(['unrouted', { view: 'unrouted' }]);
     if (capabilities?.isManager || capabilities?.canViewAll)
@@ -135,6 +139,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
         mine_assigned: 0,
         unrouted: 0,
         awaiting_manager: 0,
+        overdue: 0,
       };
       for (const [k, v] of results) next[k] = v;
       setScopeCounts(next);
@@ -178,7 +183,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       ? 'כל הפניות הפעילות במערכת'
       : 'פניות שמשויכות אליך או לקבוצות שלך';
 
-  const scopeChips: Array<{ id: Scope; label: string; show: boolean }> = [
+  const scopeChips: Array<{ id: Scope; label: string; show: boolean; tone?: 'danger' }> = [
     { id: 'all', label: 'הכל', show: true },
     { id: 'mine_assigned', label: 'משויכות אליי', show: true },
     { id: 'unrouted', label: 'תור ניתוב', show: !!capabilities?.canRoute },
@@ -187,6 +192,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       label: 'ממתינות למנהל',
       show: !!(capabilities?.isManager || capabilities?.canViewAll),
     },
+    { id: 'overdue', label: 'חורגות מ-SLA', show: true, tone: 'danger' },
   ];
 
   return (
@@ -210,6 +216,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
             .map((chip) => {
               const isActive = scope === chip.id;
               const count = scopeCounts[chip.id];
+              const isDanger = chip.tone === 'danger' && count > 0;
               return (
                 <button
                   key={chip.id}
@@ -218,7 +225,9 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
                   className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
                     isActive
                       ? 'border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900'
-                      : 'border-subtle bg-surface text-neutral-600 hover:border-neutral-400 hover:text-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-500 dark:hover:text-white'
+                      : isDanger
+                        ? 'border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200'
+                        : 'border-subtle bg-surface text-neutral-600 hover:border-neutral-400 hover:text-neutral-900 dark:text-neutral-300 dark:hover:border-neutral-500 dark:hover:text-white'
                   }`}
                   aria-pressed={isActive}
                 >
@@ -227,7 +236,9 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
                     className={`min-w-[1.25rem] rounded-full px-1.5 text-center text-[11px] font-semibold tabular-nums ${
                       isActive
                         ? 'bg-white/20 text-white dark:bg-neutral-900/20 dark:text-neutral-900'
-                        : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'
+                        : isDanger
+                          ? 'bg-rose-200/70 text-rose-800 dark:bg-rose-900/60 dark:text-rose-100'
+                          : 'bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'
                     }`}
                   >
                     {count}
@@ -288,9 +299,11 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
                 ? 'אין פניות חדשות שממתינות לניתוב.'
                 : scope === 'awaiting_manager'
                   ? 'אין פניות שממתינות להתייחסות מנהל.'
-                  : scope === 'mine_assigned'
-                    ? 'אין פניות שמשויכות אליך כרגע.'
-                    : 'כשהורים יגישו פניות, הן יופיעו כאן.'
+                  : scope === 'overdue'
+                    ? 'אין פניות שחרגו מיעד הטיפול — כל הכבוד!'
+                    : scope === 'mine_assigned'
+                      ? 'אין פניות שמשויכות אליך כרגע.'
+                      : 'כשהורים יגישו פניות, הן יופיעו כאן.'
           }
         />
       )}

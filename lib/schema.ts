@@ -143,6 +143,7 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
       ADD COLUMN IF NOT EXISTS last_activity_at      timestamptz,
       ADD COLUMN IF NOT EXISTS due_at                timestamptz,
       ADD COLUMN IF NOT EXISTS closing_email_sent_at timestamptz,
+      ADD COLUMN IF NOT EXISTS sla_reminded_at       timestamptz,
       ADD COLUMN IF NOT EXISTS legacy_id             text
   `);
 

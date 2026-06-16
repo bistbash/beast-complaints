@@ -60,6 +60,12 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <StatusPill status={inquiry.status} size="sm" />
+          {urgency === 'critical' && (
+            <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+              <span className="pill-dot" />
+              חריגה מ-SLA
+            </span>
+          )}
           {inquiry.assigned_group && (
             <span className="pill bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900">
               {groupLabel(inquiry.assigned_group)}

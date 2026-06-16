@@ -12,7 +12,8 @@ import StatusTimeline from '../components/inquiries/StatusTimeline.tsx';
 import RoutingDialog from '../components/inquiries/RoutingDialog.tsx';
 import Avatar from '../components/ui/Avatar.tsx';
 import useCapabilities from '../hooks/useCapabilities.ts';
-import { formatDateTime, formatRelative, computeUrgency } from '../utils/format.ts';
+import { useToast } from '../hooks/useToast.ts';
+import { formatDateTime, formatRelative, computeUrgency, humanizeIdentifier } from '../utils/format.ts';
 import {
   STATUS,
   PRIORITY_META,
@@ -23,6 +24,19 @@ import {
   type InquiryPriority,
   type JustificationDecision,
 } from '../utils/constants.ts';
+
+/** Maps a closing-email failure reason from the server to a Hebrew message. */
+const EMAIL_FAIL_REASONS: Record<string, string> = {
+  no_submitter_email: 'לא קיים מייל לפונה',
+  encryption_not_configured: 'מפתח ההצפנה לא הוגדר (טאב ניהול)',
+  not_configured: 'חשבון Gmail לא מחובר (טאב ניהול)',
+  pdf_failed: 'יצירת קובץ ה-PDF נכשלה',
+  send_failed: 'שליחת המייל נכשלה',
+};
+
+function emailFailMessage(reason?: string): string {
+  return (reason && EMAIL_FAIL_REASONS[reason]) || 'שליחת המייל נכשלה';
+}
 
 interface InquiryFull {
   inquiry_id: string;
@@ -93,6 +107,7 @@ export default function InquiryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { capabilities } = useCapabilities();
+  const { toast, notify, dismiss } = useToast();
   const [data, setData] = useState<DetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -148,13 +163,38 @@ export default function InquiryDetailPage() {
     if (!id || !managerDraft.trim() || !managerVerdict) return;
     setActing(true);
     try {
-      await api.post(`/api/inquiries/${id}/manager-response`, {
+      const res = await api.post(`/api/inquiries/${id}/manager-response`, {
         content: managerDraft.trim(),
         justification: managerVerdict,
       });
       setManagerDraft('');
       setManagerVerdict(null);
+      const email = res.data?.email as { sent: boolean; reason?: string } | null | undefined;
+      if (email?.sent) {
+        notify('ok', 'הפנייה נסגרה ומייל הסגירה נשלח לפונה.');
+      } else if (email) {
+        notify('err', `הפנייה נסגרה, אך מייל הסגירה לא נשלח: ${emailFailMessage(email.reason)}.`);
+      } else {
+        notify('ok', 'הפנייה נסגרה.');
+      }
       await refresh();
+    } finally {
+      setActing(false);
+    }
+  }
+
+  async function resendClosingEmail() {
+    if (!id) return;
+    setActing(true);
+    try {
+      const res = await api.post(`/api/inquiries/${id}/resend-closing-email`);
+      const email = res.data?.email as { sent: boolean; reason?: string } | null | undefined;
+      if (email?.sent) notify('ok', 'מייל הסגירה נשלח לפונה.');
+      else notify('err', `שליחת מייל הסגירה נכשלה: ${emailFailMessage(email?.reason)}.`);
+      await refresh();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      notify('err', e.response?.data?.error || 'שליחת מייל הסגירה נכשלה.');
     } finally {
       setActing(false);
     }
@@ -236,6 +276,12 @@ export default function InquiryDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill status={inquiry.status} />
                 <PriorityPill priority={inquiry.priority} />
+                {urgency === 'critical' && (
+                  <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                    <span className="pill-dot" />
+                    חריגה מ-SLA
+                  </span>
+                )}
               </div>
             </div>
 
@@ -266,7 +312,8 @@ export default function InquiryDetailPage() {
                 {inquiry.team_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.team_response_at)} ע"י{' '}
-                    {displayNames[inquiry.team_response_by?.toLowerCase() || ''] || 'Display Name'}
+                    {displayNames[inquiry.team_response_by?.toLowerCase() || ''] ||
+                      humanizeIdentifier(inquiry.team_response_by)}
                   </span>
                 )}
               </div>
@@ -317,27 +364,53 @@ export default function InquiryDetailPage() {
                 {inquiry.manager_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.manager_response_at)} ע"י{' '}
-                    {displayNames[inquiry.manager_response_by?.toLowerCase() || ''] || 'Display Name'}
+                    {displayNames[inquiry.manager_response_by?.toLowerCase() || ''] ||
+                      humanizeIdentifier(inquiry.manager_response_by)}
                   </span>
                 )}
               </div>
               {inquiry.manager_response ? (
                 <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{inquiry.manager_response}</p>
-                  {inquiry.closing_email_sent_at && (
-                    <div className="muted mt-3 flex items-center gap-1 text-xs">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M5 12l5 5L20 7"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      מייל סגירה נשלח לפונה ב-{formatDateTime(inquiry.closing_email_sent_at)}
+                  {inquiry.closing_email_sent_at ? (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="muted flex items-center gap-1 text-xs">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M5 12l5 5L20 7"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        מייל סגירה נשלח לפונה ב-{formatDateTime(inquiry.closing_email_sent_at)}
+                      </span>
+                      {capabilities?.isManager && (
+                        <Button variant="ghost" size="sm" onClick={resendClosingEmail} loading={acting}>
+                          שלח שוב
+                        </Button>
+                      )}
                     </div>
-                  )}
+                  ) : capabilities?.isManager ? (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50/60 p-2.5 text-xs dark:border-rose-900 dark:bg-rose-950/20">
+                      <span className="flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-300">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        מייל הסגירה עדיין לא נשלח לפונה.
+                      </span>
+                      <Button variant="primary" size="sm" onClick={resendClosingEmail} loading={acting}>
+                        שלח מייל סגירה
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : (
                 <p className="muted mt-2 text-sm">ממתינה להתייחסות מנהל.</p>
@@ -490,7 +563,8 @@ export default function InquiryDetailPage() {
                 <dt className="muted">מטפל</dt>
                 <dd className="font-medium">
                   {inquiry.assigned_user
-                    ? displayNames[inquiry.assigned_user.toLowerCase()] || 'Display Name'
+                    ? displayNames[inquiry.assigned_user.toLowerCase()] ||
+                      humanizeIdentifier(inquiry.assigned_user)
                     : '—'}
                 </dd>
               </div>
@@ -553,6 +627,23 @@ export default function InquiryDetailPage() {
         capabilities={capabilities}
         onRouted={refresh}
       />
+
+      {toast && (
+        <div
+          role="status"
+          className={`toast ${toast.tone === 'ok' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}
+        >
+          <span>{toast.text}</span>
+          <button
+            type="button"
+            className="opacity-70 transition hover:opacity-100"
+            onClick={dismiss}
+            aria-label="סגור"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }

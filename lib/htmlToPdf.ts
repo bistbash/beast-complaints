@@ -41,7 +41,9 @@ export async function htmlToPdfBuffer(html: string): Promise<Buffer> {
     const page = await browser.newPage();
     // A4 @ 96dpi — required so print `position: fixed; bottom: 0` anchors to the page foot.
     await page.setViewport({ width: 794, height: 1123 });
-    await page.setContent(html, { waitUntil: 'networkidle0', timeout: 45_000 });
+    // 'load' fires after embedded resources (logo/signature images) finish loading.
+    // Note: setContent does not accept 'networkidle0' (that lifecycle is goto-only).
+    await page.setContent(html, { waitUntil: 'load', timeout: 45_000 });
     await page.emulateMediaType('print');
     await pushLetterFooterToPageBottom(page);
     const pdf = await page.pdf({

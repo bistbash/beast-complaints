@@ -66,3 +66,19 @@ export function initials(name?: string | null): string {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase()).join('') || '?';
 }
+
+/**
+ * Turn an email / username into a readable fallback name, used when the Beast
+ * directory can't resolve a real display name. Never shows an English placeholder.
+ *   "ilan.brand@beast.org" → "Ilan Brand"
+ */
+export function humanizeIdentifier(identifier?: string | null): string {
+  const raw = String(identifier ?? '').trim();
+  if (!raw) return 'משתמש';
+  const local = raw.split('@')[0];
+  const words = local.split(/[._+\-]+/).filter(Boolean);
+  if (!words.length) return raw;
+  return words
+    .map((w) => (/^[a-z]/i.test(w) ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}

@@ -3,6 +3,7 @@ import axios from 'axios';
 import type { BeastUser, UserCapabilities } from '../lib/types.ts';
 import { DEFAULT_KEVA_GROUP, DEFAULT_MANAGER_ROLE_KEYS, DEFAULT_TARGET_GROUPS } from '../lib/constants.ts';
 import { configKeysForUserGroups } from '../lib/groupKeys.ts';
+import { humanizeIdentifier } from '../lib/humanize.ts';
 
 function getPortalApi(): string {
   return process.env.BEAST_PORTAL_URL || process.env.BEAST_PORTAL_API || 'http://localhost:3000';
@@ -157,7 +158,7 @@ export function buildCapabilities(user: BeastUser): UserCapabilities {
     groups: effectiveGroups,
     manageableGroups: manageable,
     email: user.email || `${user.username}@local`,
-    displayName: user.displayName || 'Display Name',
+    displayName: user.displayName || humanizeIdentifier(user.email || user.username),
     username: user.username,
     canRoute: navigator || admin || keva,
     canViewAll: navigator || admin || manager || keva,

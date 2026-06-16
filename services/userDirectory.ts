@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { groupsMatch } from '../lib/groupKeys.ts';
 import { DEFAULT_TARGET_GROUPS } from '../lib/constants.ts';
+import { humanizeIdentifier } from '../lib/humanize.ts';
 
 /**
  * Lightweight Beast directory client — resolves emails / usernames to display
@@ -101,7 +102,10 @@ export async function resolveNames(identifiers: string[]): Promise<Record<string
         x.username?.toLowerCase() === id ||
         `${x.username}@local`.toLowerCase() === id,
     );
-    if (u) result[id] = u.displayName || 'Display Name';
+    // Always return a readable name — even when the directory is empty
+    // (e.g. BEAST_API_KEY missing), fall back to a humanized identifier
+    // rather than leaking a placeholder into the UI.
+    result[id] = u?.displayName || humanizeIdentifier(id);
   }
   return result;
 }
@@ -135,6 +139,28 @@ export async function listManagers(opts: { adminGroup: string; roleKeys: string[
     if (groups.includes(admin)) return true;
     const roles = (u.roles || []).map((r) => r.toLowerCase());
     return roles.some((r) => roleSet.has(r));
+  });
+}
+
+/**
+ * List users who can route inquiries — navigators (by role key), admins (admin
+ * group), and keva members. Used to alert "someone responsible" when a still-
+ * unrouted inquiry breaches its SLA.
+ */
+export async function listNavigators(opts: {
+  adminGroup: string;
+  navigatorRoleKey: string;
+  kevaGroup: string;
+}): Promise<DirectoryUser[]> {
+  const users = await getCachedDirectory();
+  const admin = opts.adminGroup.toLowerCase();
+  const navKey = opts.navigatorRoleKey.toLowerCase();
+  const keva = opts.kevaGroup.toLowerCase();
+  return users.filter((u) => {
+    const groups = u.groups.map((g) => g.toLowerCase());
+    if (groups.includes(admin) || groups.includes(keva)) return true;
+    const roles = (u.roles || []).map((r) => r.toLowerCase());
+    return roles.includes(navKey);
   });
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Avatar from '../ui/Avatar.tsx';
 import Button from '../ui/Button.tsx';
-import { formatDateTime, formatRelative } from '../../utils/format.ts';
+import { formatDateTime, formatRelative, humanizeIdentifier } from '../../utils/format.ts';
 import { MESSAGE_TYPE, type MessageType } from '../../utils/constants.ts';
 
 interface Message {
@@ -67,7 +67,7 @@ export default function MessageThread({
       )}
       {messages.map((m) => {
         const isMine = currentUserEmail && m.author?.toLowerCase() === currentUserEmail.toLowerCase();
-        const name = m.author_name || displayNames[m.author?.toLowerCase()] || 'Display Name';
+        const name = m.author_name || displayNames[m.author?.toLowerCase()] || humanizeIdentifier(m.author);
         return (
           <div
             key={m.id}

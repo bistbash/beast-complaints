@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { beastApi } from '../utils/beastApi.ts';
+import { humanizeIdentifier } from '../utils/format.ts';
 
 export interface ChatConversation {
   username: string;
@@ -49,7 +50,7 @@ interface BeastConversationsResponse {
 function normalizeConversation(c: NonNullable<BeastConversationsResponse['conversations']>[number]): ChatConversation {
   return {
     username: c.username,
-    displayName: c.displayName || c.display_name || 'Display Name',
+    displayName: c.displayName || c.display_name || humanizeIdentifier(c.email || c.username),
     email: c.email ?? null,
     lastMessage: c.lastMessage || c.last_message || '',
     lastMessageAt: c.lastMessageAt || c.last_message_at || null,
@@ -166,7 +167,7 @@ export default function useBeastChat(enabled: boolean): UseBeastChat {
         const res = await beastApi().get<BeastUsersResponse>('/api/chat/users');
         const list: DirectoryUser[] = (res.data?.users || []).map((u) => ({
           username: u.username,
-          displayName: u.displayName || u.display_name || 'Display Name',
+          displayName: u.displayName || u.display_name || humanizeIdentifier(u.email || u.username),
           email: u.email ?? null,
           isOnline: u.is_online ?? false,
           lastSeen: u.last_seen ?? null,

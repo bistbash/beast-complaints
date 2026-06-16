@@ -22,6 +22,7 @@ const [
   { default: settingsRoutes },
   { ensureSchema, ensureInquiryWorkflowColumns },
   { loadDatasetMeta },
+  { startSlaReminderScheduler },
 ] = await Promise.all([
   import('./config/db.ts'),
   import('./routes/auth.ts'),
@@ -29,6 +30,7 @@ const [
   import('./routes/settings.ts'),
   import('./lib/schema.ts'),
   import('./services/datasetMeta.ts'),
+  import('./services/slaReminders.ts'),
 ]);
 
 const app = express();
@@ -119,6 +121,7 @@ async function startup() {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[beast-complaints] failed to ensure workflow columns: ${msg}`);
     }
+    startSlaReminderScheduler(meta);
   }
 }
 
