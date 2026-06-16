@@ -14,30 +14,30 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
   const bodyMid = isJustified
     ? `<p class="p">
-        לאחר בדיקה יסודית שנערכה על ידי הנהלת המכללה, לרבות עיון בפרטי הפנייה
+        לאחר בדיקה יסודית שנערכה על ידי הנהלת בית הספר, לרבות עיון בפרטי הפנייה
         ובהתייחסות הגורמים הרלוונטיים, נמצא כי הפנייה <strong>מוצדקת</strong>.
-        אנו מודים לך על שהפנית את תשומת ליבנו לנושא זה, ורואים בכך הזדמנות
-        ללמידה, לשיפור ולהתייעלות בשירות לקהילת המכללה.
+        אנו מודים לך על שהפנית את תשומת ליבנו לנושא, ורואים בכך הזדמנות
+        ללמידה, לשיפור ולייעול השירות לתלמידים ולהוריהם.
       </p>`
     : `<p class="p">
-        לאחר בדיקה מעמיקה שנערכה על ידי הנהלת המכללה, לרבות עיון בפרטי הפנייה
-        ובהתייחסות הגורמים הרלוונטיים, נמצא כי הפנייה <strong>לא מוצדקת</strong>.
-        אנו מבינים שייתכן שהתוצאה אינה תואמת את ציפיותיך, ומכבדים את נקודת
-        המבט שהבאת בפנייה.
+        לאחר בדיקה מעמיקה שנערכה על ידי הנהלת בית הספר, לרבות עיון בפרטי הפנייה
+        ובהתייחסות הגורמים הרלוונטיים, נמצא כי הפנייה <strong>אינה מוצדקת</strong>.
+        אנו מבינים כי ייתכן שהתוצאה אינה תואמת את ציפיותיך, ומכבדים את נקודת
+        המבט שהצגת בפנייתך.
       </p>`;
 
   const bodyClose = isJustified
     ? `<p class="p">
-        הנהלת המכללה פועלת בשקיפות ובשיתוף פעולה מלא עם ההורים והתלמידים,
-        ותמשיך לפעול לשמירה על תקשורת חיובית, מכבדת ופתוחה.
+        הנהלת בית הספר פועלת בשקיפות ובשיתוף פעולה מלא עם ההורים והתלמידים,
+        ותמשיך לטפח תקשורת חיובית, מכבדת ופתוחה.
       </p>
       <p class="p">
-        נשמח לעמוד לרשותך בכל שאלה נוספת, ומודים לך על המעורבות והאכפתיות
-        כלפי חיי הקהילה הבית-ספרית.
+        נשמח לעמוד לרשותך בכל שאלה נוספת, ומודים לך על מעורבותך ואכפתיותך
+        בנעשה בבית הספר.
       </p>`
     : `<p class="p">
         אנו מודים לך על שהפנית את תשומת ליבנו, ומאמינים כי שיח פתוח ומכבד
-        בין ההורים, התלמידים והנהלה תורם לקהילה הבית-ספרית.
+        בין ההורים, התלמידים וההנהלה מחזק את הקשר עם בית הספר.
       </p>
       <p class="p">
         אם ברצונך להבהיר או להוסיף פרטים, נשמח לעמוד לרשותך בכל עת.
@@ -155,8 +155,6 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
     padding-left: 14pt;
   }
   .unit-table .u-val { font-weight: 400; }
-  /* תאריך בשורה נפרדת מתחת לסימוכין, עם רווח מפריד */
-  .unit-table .unit-date-row td { padding-top: 9pt; }
 
   /* ── כותרת "הנדון:" ── */
   .subject-line {
@@ -224,6 +222,7 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   }
   .footer a { color: #222; text-decoration: none; }
   .footer .sep { margin: 0 6pt; }
+  .footer-org { font-weight: 700; font-size: var(--fs-small); margin-bottom: 2pt; }
 </style>
 </head>
 <body>
@@ -243,8 +242,7 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
               <tr><td class="u-label">בח"א</td><td class="u-val">21</td></tr>
               <tr><td class="u-label">טייסת</td><td class="u-val">ביס"ט ב"ש</td></tr>
               <tr><td class="u-label">גף</td><td class="u-val">מנהלה</td></tr>
-              <tr><td class="u-label">סימוכין</td><td class="u-val">&nbsp;</td></tr>
-              <tr class="unit-date-row"><td class="u-label">תאריך</td><td class="u-val">{{closed_at}}</td></tr>
+              <tr><td class="u-label">סימוכין</td><td class="u-val">{{closed_at}}</td></tr>
             </table>
           </td>
         </tr>
@@ -259,8 +257,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
       <p class="p">
         תודה על פנייתך מיום {{form_timestamp}} בנושא
-        &#x201C;{{subject}}&#x201D;. אנו מעריכים את הזמן והמאמץ שהקדשת לשיתוף אותנו,
-        ורואים בפניות ההורים והתלמידים חלק חשוב בשיפור השירות וההתנהלות במוסדנו.
+        &#x201C;{{subject}}&#x201D;. אנו מעריכים את הזמן והמאמץ שהשקעת בפנייתך אלינו,
+        ורואים בפניות ההורים והתלמידים נדבך חשוב בשיפור השירות וההתנהלות בבית הספר.
       </p>
 
       ${bodyMid}
@@ -279,8 +277,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
         <div class="signature">
           <p class="sign-off">בכבוד רב,</p>
           <div class="sig-block">
-            <img class="sig-hand" src="{{asset_signature}}" alt="" />
-            <div class="sig-name">קובי דודסון</div>
+            <img class="sig-hand" src="{{asset_signature}}" alt="חתימת מנהל ביה&#x201C;ס" />
+            <div class="sig-name">קובי דוידסון אל&#x201C;מ/מ&#x27;</div>
             <div class="sig-role">מנהל ביה&#x201C;ס</div>
           </div>
         </div>
@@ -288,7 +286,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
       <hr class="footer-rule" />
       <div class="footer">
-        <div>דרך אילן רמון 1, באר שבע<span class="sep">|</span>טלפון: 08-9907410/2<span class="sep">|</span>פקס: 08-9907411/02</div>
+        <div class="footer-org">המכללה הטכנולוגית של חיל האוויר באר שבע</div>
+        <div>דרך אילן רמון 1, באר שבע<span class="sep">|</span>טלפון: 08-9907410/2</div>
         <div>
           <a href="http://techni-bs.iscool.co.il">techni-bs.iscool.co.il</a>
           <span class="sep">|</span>
