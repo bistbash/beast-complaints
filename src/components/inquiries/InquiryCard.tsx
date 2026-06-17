@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import PriorityPill from '../ui/PriorityPill.tsx';
 import Avatar from '../ui/Avatar.tsx';
-import { CompactPipeline, StageChip } from './Pipeline.tsx';
+import { CompactPipeline } from './Pipeline.tsx';
 import { computeUrgency, formatRelative } from '../../utils/format.ts';
 import { computePipeline } from '../../utils/pipeline.ts';
 import {
@@ -51,19 +51,10 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
     : null;
 
   return (
-    <Link to={`/inquiries/${inquiry.inquiry_id}`} className="block">
+    <Link to={`/inquiries/${inquiry.inquiry_id}`} className="block rounded-2xl">
       <article className={`card card-hover card-interactive fade-in-up flex flex-col ${urgencyClass}`}>
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <StageChip value={pipe} />
-              {urgency === 'critical' && (
-                <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-                  <span className="pill-dot" />
-                  חריגה מ-SLA
-                </span>
-              )}
-            </div>
             <h3 className="line-clamp-2 text-base font-semibold leading-snug">{inquiry.subject}</h3>
             <p className="muted mt-1 line-clamp-2 text-sm leading-relaxed">{inquiry.description}</p>
           </div>

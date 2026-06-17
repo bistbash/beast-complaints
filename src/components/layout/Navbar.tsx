@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import Avatar from '../ui/Avatar.tsx';
 import ThemeToggle from '../ui/ThemeToggle.tsx';
+import BrandMark from './BrandMark.tsx';
 import type { Capabilities } from '../../hooks/useCapabilities.ts';
 import { humanizeIdentifier } from '../../utils/format.ts';
 
@@ -56,9 +57,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
           className="flex items-center gap-2 transition hover:opacity-90"
           onClick={() => navigate('/inbox')}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-base font-bold text-white shadow-soft">
-            פ
-          </div>
+          <BrandMark size={36} />
           <div className="flex flex-col items-start leading-tight">
             <span className="text-sm font-bold tracking-tight">פניות לקוח</span>
             <span className="text-[11px] text-neutral-500">Beast Complaints</span>
@@ -90,6 +89,9 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
               className="flex items-center gap-2 rounded-full border border-subtle px-2 py-1 transition hover:bg-neutral-50 dark:hover:bg-neutral-800"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="תפריט משתמש"
             >
               <Avatar name={userLabel} src={user?.avatarUrl} size={28} />
               <span className="hidden text-sm font-medium lg:block">{userLabel}</span>

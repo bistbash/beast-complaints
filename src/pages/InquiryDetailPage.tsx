@@ -316,11 +316,14 @@ export default function InquiryDetailPage() {
             </div>
           </Card>
 
-          {/* === Team Response section === */}
+          {/* === Team Response section (pipeline stage: team / violet) === */}
           {(canWriteTeamResponse || inquiry.team_response) && (
-            <Card>
+            <Card className="stage" data-color="violet">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">התייחסות צוות</h2>
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'rgb(var(--stage) / 1)' }} />
+                  <h2 className="text-sm font-semibold">התייחסות הגורם המטפל</h2>
+                </div>
                 {inquiry.team_response_at && (
                   <span className="muted text-xs">
                     נכתבה {formatRelative(inquiry.team_response_at)} ע"י{' '}
@@ -363,12 +366,13 @@ export default function InquiryDetailPage() {
             </Card>
           )}
 
-          {/* === Manager Response section === */}
+          {/* === Manager Response section (pipeline stage: manager / amber) === */}
           {(canWriteManagerResponse || inquiry.manager_response) && (
-            <Card>
+            <Card className="stage" data-color="amber">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-semibold">התייחסות מנהל / החלטה סופית</h2>
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'rgb(var(--stage) / 1)' }} />
+                  <h2 className="text-sm font-semibold">התייחסות המד"ר / החלטה סופית</h2>
                   {inquiry.justification && (
                     <JustificationPill decision={inquiry.justification} />
                   )}
@@ -382,7 +386,7 @@ export default function InquiryDetailPage() {
                 )}
               </div>
               {inquiry.manager_response ? (
-                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900 dark:bg-amber-950/20">
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{inquiry.manager_response}</p>
                   {inquiry.closing_email_sent_at ? (
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">

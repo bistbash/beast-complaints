@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Button from '../ui/Button.tsx';
+import { formatRelative, humanizeIdentifier } from '../../utils/format.ts';
 import type { EmailSettings } from '../../hooks/useEmailSettings.ts';
 import type { Notify } from '../../hooks/useToast.ts';
 
@@ -95,35 +96,46 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
 
   return (
     <div className="space-y-0">
-      {/* Block 1 — operational connection */}
+      {/* Block 1 — operational connection (status hero) */}
       <section className="settings-block">
-        <div className="settings-block-head">
-          <div className="settings-block-title">מצב החיבור</div>
-          <div className="settings-block-desc">חשבון Gmail משותף שדרכו נשלחים מכתבי הסגירה</div>
-        </div>
-        <div className="settings-block-body">
+        <div
+          className={`relative p-5 ${
+            status.connected
+              ? 'bg-gradient-to-l from-emerald-50 via-surface to-surface dark:from-emerald-950/30 dark:via-surface dark:to-surface'
+              : 'bg-gradient-to-l from-amber-50 via-surface to-surface dark:from-amber-950/25 dark:via-surface dark:to-surface'
+          }`}
+        >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                className={`relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
                   status.connected
                     ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
-                    : 'bg-neutral-100 text-neutral-400 dark:bg-neutral-800'
+                    : 'bg-amber-100 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'
                 }`}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path
-                    d="M4 6h16v12H4V6zm0-1a1 1 0 00-1 1v12a1 1 0 001 1h16a1 1 0 001-1V6a1 1 0 00-1-1H4z"
-                    fill="currentColor"
-                  />
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M4 6h16v12H4V6zm0-1a1 1 0 00-1 1v12a1 1 0 001 1h16a1 1 0 001-1V6a1 1 0 00-1-1H4z" fill="currentColor" />
                   <path d="M4 7l8 6 8-6" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
+                <span
+                  className={`absolute -bottom-0.5 -left-0.5 h-4 w-4 rounded-full border-2 border-surface ${
+                    status.connected ? 'bg-emerald-500' : 'bg-amber-500'
+                  }`}
+                  aria-hidden
+                />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold">{status.connected ? 'מחובר' : 'לא מחובר'}</div>
-                <div className="truncate font-mono text-xs text-neutral-500" dir="ltr">
-                  {status.connected ? status.gmailAddress : 'נדרש חיבור לפני שליחה'}
+                <div className="text-base font-bold">{status.connected ? 'Gmail מחובר' : 'Gmail לא מחובר'}</div>
+                <div className="truncate font-mono text-sm text-neutral-600 dark:text-neutral-300" dir="ltr">
+                  {status.connected ? status.gmailAddress : 'נדרש חיבור לפני שליחת מכתבי סגירה'}
                 </div>
+                {status.connected && status.connectedAt && (
+                  <div className="muted mt-1 text-xs">
+                    חובר {formatRelative(status.connectedAt)}
+                    {status.connectedBy ? ` · ע"י ${humanizeIdentifier(status.connectedBy)}` : ''}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -138,7 +150,7 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
                   </Button>
                 </>
               ) : (
-                <Button type="button" size="sm" disabled={busy || !configOk} onClick={() => void connect()}>
+                <Button type="button" disabled={busy || !configOk} onClick={() => void connect()}>
                   התחבר עם Google
                 </Button>
               )}
@@ -146,7 +158,7 @@ export default function ConnectionPanel({ settings, notify, adminEmail }: Props)
           </div>
 
           {!configOk && (
-            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
               השלימו את הגדרות OAuth למטה ושמרו לפני החיבור.
             </p>
           )}

@@ -22,18 +22,20 @@ interface MessageThreadProps {
   disabled?: boolean;
 }
 
+// Accent on the reading-start side (right, in RTL) and colour-matched to the
+// pipeline stage the message belongs to.
 function messageTone(type: MessageType): string {
   switch (type) {
     case MESSAGE_TYPE.SYSTEM:
-      return 'border-l-4 border-neutral-300 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900/40';
+      return 'border-r-4 border-neutral-300 bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900/40';
     case MESSAGE_TYPE.ROUTING:
-      return 'border-l-4 border-violet-300 bg-violet-50/60 dark:border-violet-800 dark:bg-violet-950/30';
+      return 'border-r-4 border-indigo-300 bg-indigo-50/60 dark:border-indigo-800 dark:bg-indigo-950/30';
     case MESSAGE_TYPE.STATUS_CHANGE:
-      return 'border-l-4 border-sky-300 bg-sky-50/60 dark:border-sky-800 dark:bg-sky-950/30';
+      return 'border-r-4 border-sky-300 bg-sky-50/60 dark:border-sky-800 dark:bg-sky-950/30';
     case MESSAGE_TYPE.TEAM_RESPONSE:
-      return 'border-l-4 border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40';
+      return 'border-r-4 border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40';
     case MESSAGE_TYPE.MANAGER_RESPONSE:
-      return 'border-l-4 border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/40';
+      return 'border-r-4 border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40';
     default:
       return 'border border-subtle bg-surface';
   }

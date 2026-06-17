@@ -200,8 +200,8 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
   .closing-block { margin-top: 0; }
   .closing-block .p:last-of-type { margin-bottom: 0; }
 
-  /* חתימה */
-  .signature { margin-top: 12pt; text-align: right; }
+  /* חתימה — יושבת בראש בלוק התחתית, מעל קו ההפרדה ופרטי הקשר */
+  .signature { margin-top: 0; text-align: right; }
   .signature .sign-off { margin: 0 0 12pt !important; font-weight: 700; }
   .sig-block { display: inline-block; text-align: right; min-width: 160px; max-width: 220px; }
   .sig-hand {
@@ -273,20 +273,22 @@ export function institutionalClosingLetterHtml(kind: JustificationDecision): str
 
       <div class="closing-block">
         ${bodyClose}
-
-        <div class="signature">
-          <p class="sign-off">בכבוד רב,</p>
-          <div class="sig-block">
-            <img class="sig-hand" src="{{asset_signature_2}}" alt="חתימת מנהל ביה&#x201C;ס" />
-            <div class="sig-name">קובי דוידסון אל&#x201C;מ/מ&#x27;</div>
-            <div class="sig-role">מנהל ביה&#x201C;ס</div>
-          </div>
-        </div>
       </div><!-- /.closing-block -->
 
     </div><!-- /.sheet-main -->
 
+    <!-- חתימה + פוטר ננעצים יחד בתחתית הדף (עמוד יחיד), וזורמים יחד בסוף
+         המכתב כשההתייחסות ארוכה ונדרשים כמה עמודים. -->
     <div class="sheet-bottom">
+      <div class="signature">
+        <p class="sign-off">בכבוד רב,</p>
+        <div class="sig-block">
+          <img class="sig-hand" src="{{asset_signature_2}}" alt="חתימת מנהל ביה&#x201C;ס" />
+          <div class="sig-name">קובי דוידסון אל&#x201C;מ/מ&#x27;</div>
+          <div class="sig-role">מנהל ביה&#x201C;ס</div>
+        </div>
+      </div>
+
       <hr class="footer-rule" />
       <div class="footer">
         <div class="footer-org">המכללה הטכנולוגית של חיל האוויר באר שבע</div>

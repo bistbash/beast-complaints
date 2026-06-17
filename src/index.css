@@ -155,7 +155,8 @@ html, body {
   box-shadow: 0 8px 20px -6px rgb(var(--primary) / 0.35);
 }
 .btn-primary:focus-visible {
-  outline: 3px solid rgb(var(--primary) / 0.18);
+  outline: 2px solid rgb(var(--accent) / 0.9);
+  outline-offset: 2px;
 }
 
 .btn-ghost {
@@ -848,6 +849,19 @@ html, body {
  * --------------------------------------------------------------- */
 ::selection {
   background-color: rgb(var(--accent) / 0.25);
+}
+
+/* Keyboard focus visibility (WCAG 2.4.7). One consistent accent ring on every
+ * interactive element that doesn't already supply its own focus style. Using
+ * :focus-visible keeps it keyboard-/AT-only, so mouse clicks stay clean. The
+ * outline follows each element's own border-radius (pills, cards, chips). */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:not([tabindex='-1']):focus-visible,
+summary:focus-visible {
+  outline: 2px solid rgb(var(--accent) / 0.9);
+  outline-offset: 2px;
 }
 
 * { scrollbar-width: thin; scrollbar-color: rgb(var(--border-strong)) transparent; }

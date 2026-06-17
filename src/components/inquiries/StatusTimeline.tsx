@@ -14,6 +14,25 @@ interface StatusTimelineProps {
   displayNames?: Record<string, string>;
 }
 
+/** Colour each history dot by the pipeline stage its action belongs to. */
+const ACTION_COLOR: Record<string, string> = {
+  created: '#94a3b8',
+  routed: '#6366f1',
+  rerouted: '#6366f1',
+  assigned: '#6366f1',
+  team_response_submitted: '#8b5cf6',
+  manager_response_submitted: '#f59e0b',
+  justification_set: '#f59e0b',
+  closed: '#10b981',
+  closing_email_sent: '#10b981',
+  reopened: '#f59e0b',
+  sla_breach: '#f43f5e',
+};
+
+function actionColor(action: string): string {
+  return ACTION_COLOR[action] || '#6366f1';
+}
+
 export default function StatusTimeline({ history, displayNames = {} }: StatusTimelineProps) {
   if (!history.length) {
     return <p className="muted text-sm">אין רישומי היסטוריה.</p>;
@@ -50,7 +69,8 @@ export default function StatusTimeline({ history, displayNames = {} }: StatusTim
         return (
           <li key={h.id} className="relative pr-4">
             <span
-              className="absolute right-[-3px] top-2 h-2 w-2 rounded-full bg-indigo-500"
+              className="absolute right-[-3px] top-2 h-2 w-2 rounded-full ring-2 ring-surface"
+              style={{ background: actionColor(h.action) }}
               aria-hidden
             />
             <div className="text-sm">

@@ -30,14 +30,19 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={['btn', variantClass, sizeClass, className].filter(Boolean).join(' ')}
         disabled={disabled || loading}
+        aria-busy={loading || undefined}
         {...rest}
       >
         {loading ? (
-          <span aria-hidden="true" className="flex items-center gap-1">
-            <span className="dot-wave">•</span>
-            <span className="dot-wave" style={{ animationDelay: '0.15s' }}>•</span>
-            <span className="dot-wave" style={{ animationDelay: '0.3s' }}>•</span>
-          </span>
+          <>
+            <span aria-hidden="true" className="flex items-center gap-1">
+              <span className="dot-wave">•</span>
+              <span className="dot-wave" style={{ animationDelay: '0.15s' }}>•</span>
+              <span className="dot-wave" style={{ animationDelay: '0.3s' }}>•</span>
+            </span>
+            {/* Keep the accessible name while the spinner shows. */}
+            <span className="sr-only">{children}</span>
+          </>
         ) : (
           <>
             {leftIcon && <span aria-hidden="true">{leftIcon}</span>}

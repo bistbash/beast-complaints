@@ -11,7 +11,8 @@ const PIN_BOTTOM_RULES = `
     width: 210mm !important;
     margin: 0 auto !important;
   }
-  .sheet-main { padding-bottom: 24mm !important; }
+  /* Reserve space for the signature + footer block pinned at the bottom. */
+  .sheet-main { padding-bottom: 60mm !important; }
   .sheet-bottom {
     position: absolute !important;
     left: 20mm !important;
@@ -21,11 +22,14 @@ const PIN_BOTTOM_RULES = `
     padding: 0 !important;
   }`;
 
+/**
+ * Screen-only pinning. We deliberately do NOT pin in `@media print`: for the PDF
+ * the bottom block must *flow* with the content so a long response can spill onto
+ * additional pages (an absolutely-positioned block breaks multi-page output).
+ * Single-page PDFs are pinned at runtime by `pushLetterFooterToPageBottom`.
+ */
 const LAYOUT_FIX_STYLE = `<style id="letter-layout-fix">
 @media screen {${PIN_BOTTOM_RULES}
-}
-@media print {${PIN_BOTTOM_RULES}
-  .sheet { box-shadow: none !important; }
 }
 </style>`;
 
