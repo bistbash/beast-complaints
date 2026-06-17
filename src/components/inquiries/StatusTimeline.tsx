@@ -1,5 +1,13 @@
 import { formatDateTime, formatRelative, humanizeIdentifier } from '../../utils/format.ts';
-import { HISTORY_LABELS, groupLabel } from '../../utils/constants.ts';
+import {
+  HISTORY_LABELS,
+  groupLabel,
+  JUSTIFICATION_META,
+  PRIORITY_META,
+  STATUS_META,
+  type InquiryPriority,
+  type JustificationDecision,
+} from '../../utils/constants.ts';
 
 interface HistoryRow {
   id: string;
@@ -33,6 +41,49 @@ function actionColor(action: string): string {
   return ACTION_COLOR[action] || '#6366f1';
 }
 
+/**
+ * Turn a single history detail entry into a localized "label: value" pair.
+ * Returns null for entries that should be hidden (e.g. a falsy flag). Keeps
+ * raw English keys/values from ever leaking into the timeline.
+ */
+function renderDetail(
+  key: string,
+  value: unknown,
+  displayNames: Record<string, string>,
+): { label: string; text: string } | null {
+  switch (key) {
+    case 'from_group':
+      return { label: 'מקבוצה', text: groupLabel(String(value)) };
+    case 'to_group':
+      return { label: 'לקבוצה', text: groupLabel(String(value)) };
+    case 'assigned_user':
+      return {
+        label: 'מטפל',
+        text: displayNames[String(value).toLowerCase()] || humanizeIdentifier(String(value)),
+      };
+    case 'route_to_manager':
+      return value ? { label: 'ניתוב', text: 'ישירות למנהל' } : null;
+    case 'justification': {
+      const meta = JUSTIFICATION_META[String(value) as JustificationDecision];
+      return { label: 'החלטה', text: meta ? meta.label : String(value) };
+    }
+    case 'from':
+    case 'to': {
+      const meta = PRIORITY_META[String(value) as InquiryPriority];
+      return { label: key === 'from' ? 'מ' : 'ל', text: meta ? meta.label : String(value) };
+    }
+    case 'status': {
+      const meta = STATUS_META[String(value) as keyof typeof STATUS_META];
+      return { label: 'סטטוס', text: meta ? meta.label : String(value) };
+    }
+    case 'note':
+      return { label: 'הערה', text: String(value) };
+    default:
+      if (typeof value === 'boolean') return { label: key, text: value ? 'כן' : 'לא' };
+      return { label: key, text: String(value) };
+  }
+}
+
 export default function StatusTimeline({ history, displayNames = {} }: StatusTimelineProps) {
   if (!history.length) {
     return <p className="muted text-sm">אין רישומי היסטוריה.</p>;
@@ -44,26 +95,10 @@ export default function StatusTimeline({ history, displayNames = {} }: StatusTim
         const name = displayNames[h.actor?.toLowerCase()] || humanizeIdentifier(h.actor);
         const detailsStr = h.details && Object.keys(h.details).length
           ? Object.entries(h.details)
-              .filter(([_, v]) => v !== null && v !== undefined && v !== '')
-              .map(([k, v]) => {
-                const label =
-                  k === 'from_group'
-                    ? 'מקבוצה'
-                    : k === 'to_group'
-                      ? 'לקבוצה'
-                      : k === 'assigned_user'
-                        ? 'מטפל'
-                        : k === 'route_to_manager'
-                          ? 'ישירות למנהל'
-                          : k;
-                const value =
-                  k === 'from_group' || k === 'to_group'
-                    ? groupLabel(String(v))
-                    : k === 'assigned_user'
-                      ? displayNames[String(v).toLowerCase()] || humanizeIdentifier(String(v))
-                      : String(v);
-                return `${label}: ${value}`;
-              })
+              .filter(([, v]) => v !== null && v !== undefined && v !== '')
+              .map(([k, v]) => renderDetail(k, v, displayNames))
+              .filter((d): d is { label: string; text: string } => d !== null)
+              .map((d) => `${d.label}: ${d.text}`)
               .join(' · ')
           : '';
         return (
