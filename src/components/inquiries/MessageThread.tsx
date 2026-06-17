@@ -80,9 +80,9 @@ export default function MessageThread({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
                   <span className="text-sm font-semibold">{name}</span>
-                  {isMine && <span className="text-[10px] text-neutral-500">(אני)</span>}
+                  {isMine && <span className="text-[10px] text-neutral-500 dark:text-neutral-400">(אני)</span>}
                   <time
-                    className="text-xs text-neutral-500"
+                    className="text-xs text-neutral-500 dark:text-neutral-400"
                     title={formatDateTime(m.created_at)}
                   >
                     {formatRelative(m.created_at)}
@@ -106,7 +106,7 @@ export default function MessageThread({
             rows={3}
           />
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-neutral-500 dark:text-neutral-400">
               {draft.length > 0 && `${draft.length} תווים`}
             </span>
             <Button

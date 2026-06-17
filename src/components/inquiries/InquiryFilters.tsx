@@ -20,6 +20,10 @@ interface InquiryFiltersProps {
 export default function InquiryFilters({ value, groups, groupLabels = {}, onChange, onReset }: InquiryFiltersProps) {
   const [open, setOpen] = useState(true);
 
+  // Count the dropdown filters that narrow the list (search is always visible).
+  const activeCount = [value.status, value.priority, value.group].filter(Boolean).length;
+  const hasAny = activeCount > 0 || !!value.search;
+
   return (
     <section className="card !p-4">
       <div className="flex items-center justify-between gap-3">
@@ -39,10 +43,15 @@ export default function InquiryFilters({ value, groups, groupLabels = {}, onChan
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="btn btn-ghost btn-sm"
+          className="btn btn-ghost btn-sm gap-1.5"
           aria-expanded={open}
         >
           {open ? 'סגור סינון' : 'הצג סינון'}
+          {activeCount > 0 && (
+            <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-white tabular-nums">
+              {activeCount}
+            </span>
+          )}
         </button>
       </div>
       {open && (
@@ -89,7 +98,7 @@ export default function InquiryFilters({ value, groups, groupLabels = {}, onChan
             </select>
           </div>
           <div className="flex items-end">
-            <Button variant="ghost" size="sm" onClick={onReset} className="w-full">
+            <Button variant="ghost" size="sm" onClick={onReset} className="w-full" disabled={!hasAny}>
               נקה סינון
             </Button>
           </div>

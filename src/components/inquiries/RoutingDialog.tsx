@@ -271,7 +271,7 @@ export default function RoutingDialog({
                 {membersWarning}
               </p>
             ) : members.length === 0 && !membersLoading ? (
-              <p className="text-xs text-neutral-500">
+              <p className="muted text-xs">
                 {group ? 'לא נמצאו חברי צוות בקבוצה זו ב-AD.' : 'לא נמצאו משתמשים זמינים לניתוב.'}
               </p>
             ) : (

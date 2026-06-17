@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../utils/api.ts';
 import { STATUS_META, PRIORITY_META, CATEGORIES, groupLabel } from '../utils/constants.ts';
 import LoadingScreen from '../components/layout/LoadingScreen.tsx';
+import ErrorShell from '../components/layout/ErrorShell.tsx';
 import Empty from '../components/ui/Empty.tsx';
 import { PIPELINE_STAGES } from '../utils/pipeline.ts';
 import { PipelineLegend } from '../components/inquiries/Pipeline.tsx';
@@ -48,16 +49,36 @@ function formatHours(h: number | null | undefined): string {
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(false);
     api
       .get('/api/inquiries/stats')
       .then((res) => setStats(res.data))
-      .catch(() => setStats(null))
+      .catch(() => {
+        setStats(null);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   if (loading) return <LoadingScreen message="טוען סטטיסטיקות…" />;
+  if (error) {
+    return (
+      <ErrorShell
+        title="טעינת הסטטיסטיקות נכשלה"
+        description="לא הצלחנו לטעון את לוח הבקרה. בדקו את החיבור ונסו שוב."
+        actionLabel="נסה שוב"
+        onAction={load}
+      />
+    );
+  }
   if (!stats) {
     return (
       <div className="container-max py-8">

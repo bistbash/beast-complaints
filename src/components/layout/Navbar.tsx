@@ -60,7 +60,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
           <BrandMark size={36} />
           <div className="flex flex-col items-start leading-tight">
             <span className="text-sm font-bold tracking-tight">פניות לקוח</span>
-            <span className="text-[11px] text-neutral-500">Beast Complaints</span>
+            <span className="text-[11px] text-neutral-500 dark:text-neutral-400">Beast Complaints</span>
           </div>
         </button>
 
@@ -105,7 +105,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
                   <Avatar name={userLabel} src={user?.avatarUrl} size={40} />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold">{userLabel}</div>
-                    <div className="truncate text-xs text-neutral-500">{user?.email || '—'}</div>
+                    <div className="truncate text-xs text-neutral-500 dark:text-neutral-400">{user?.email || '—'}</div>
                   </div>
                 </div>
                 {capabilities && (
@@ -184,7 +184,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
                 <Avatar name={userLabel} src={user?.avatarUrl} size={32} />
                 <div className="text-sm">
                   <div className="font-semibold leading-tight">{userLabel}</div>
-                  <div className="text-xs text-neutral-500">{user?.email}</div>
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400">{user?.email}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">

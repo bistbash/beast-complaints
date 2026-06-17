@@ -33,6 +33,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
   const [groups, setGroups] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [listTotal, setListTotal] = useState(0);
+  const [reloadKey, setReloadKey] = useState(0);
   const [params, setParams] = useSearchParams();
   const { capabilities } = useCapabilities();
 
@@ -110,7 +111,7 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [filters, scope, isClosed]);
+  }, [filters, scope, isClosed, reloadKey]);
 
   // Refresh scope counts whenever items change (cheap because we fetch counts together).
   useEffect(() => {
@@ -279,8 +280,15 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
       )}
 
       {error && !loading && (
-        <div className="card border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
-          {error}
+        <div className="card flex flex-wrap items-center justify-between gap-3 border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="btn btn-ghost btn-sm border-rose-300 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:text-rose-200 dark:hover:bg-rose-950/60"
+          >
+            נסה שוב
+          </button>
         </div>
       )}
 
