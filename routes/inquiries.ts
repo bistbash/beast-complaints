@@ -15,6 +15,7 @@ import { humanizeIdentifier } from '../lib/humanize.ts';
 import { loadDatasetMeta } from '../services/datasetMeta.ts';
 import {
   changePriority,
+  deleteInquiry,
   getInquiry,
   listHistory,
   listInquiries,
@@ -652,6 +653,40 @@ router.post('/:id/reopen', async (req, res, next) => {
       return;
     }
     res.json({ inquiry: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Permanently delete an inquiry (admin only). Requires the caller to echo back
+ * the exact subject as a typed confirmation — guards against deleting the wrong
+ * row. Intended mainly for cleaning up test inquiries.
+ */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const meta = await requireDataset();
+    const caps = buildCapabilities(req.user);
+    if (!caps.isAdmin) {
+      res.status(403).json({ error: 'רק מנהל מערכת יכול למחוק פניות לצמיתות' });
+      return;
+    }
+    const existing = await getInquiry(meta, req.params.id);
+    if (!existing) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
+    }
+    const confirm = typeof req.body?.confirmSubject === 'string' ? req.body.confirmSubject.trim() : '';
+    if (confirm !== (existing.subject || '').trim()) {
+      res.status(400).json({ error: 'שם הפנייה שהוקלד אינו תואם — המחיקה בוטלה' });
+      return;
+    }
+    await deleteInquiry(meta, req.params.id);
+    res.json({ ok: true, deleted: { inquiry_id: req.params.id, subject: existing.subject } });
   } catch (err) {
     next(err);
   }

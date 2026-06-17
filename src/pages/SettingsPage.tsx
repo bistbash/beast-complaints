@@ -7,10 +7,11 @@ import LoadingScreen from '../components/layout/LoadingScreen.tsx';
 import LetterStudio from '../components/settings/LetterStudio.tsx';
 import AssetsManager from '../components/settings/AssetsManager.tsx';
 import ConnectionPanel from '../components/settings/ConnectionPanel.tsx';
+import InquiryAdminPanel from '../components/settings/InquiryAdminPanel.tsx';
 
-type Section = 'letters' | 'assets' | 'connection';
+type Section = 'letters' | 'assets' | 'connection' | 'cleanup';
 
-const SECTION_IDS: Section[] = ['letters', 'assets', 'connection'];
+const SECTION_IDS: Section[] = ['letters', 'assets', 'connection', 'cleanup'];
 
 const OAUTH_ERRORS: Record<string, string> = {
   access_denied: 'ההרשאה ב-Google בוטלה',
@@ -35,9 +36,13 @@ const SECTION_META: Record<Section, { title: string; desc: string }> = {
     title: 'חיבור ושליחה',
     desc: 'חשבון Gmail משותף לשליחת מכתבי הסגירה, זהות השולח והגדרות OAuth.',
   },
+  cleanup: {
+    title: 'מחיקת פניות',
+    desc: 'מחיקה לצמיתות של פניות — בעיקר לניקוי פניות בדיקה. הפעולה אינה הפיכה.',
+  },
 };
 
-const NAV: { id: Section; title: string; sub: string; icon: ReactNode }[] = [
+const NAV: { id: Section; title: string; sub: string; icon: ReactNode; adminOnly?: boolean }[] = [
   {
     id: 'letters',
     title: 'מכתבי סגירה',
@@ -69,6 +74,19 @@ const NAV: { id: Section; title: string; sub: string; icon: ReactNode }[] = [
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
         <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.6" />
         <path d="M4 8l8 6 8-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'cleanup',
+    title: 'מחיקת פניות',
+    sub: 'ניקוי פניות בדיקה',
+    adminOnly: true,
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v12a1 1 0 01-1 1H7a1 1 0 01-1-1V7"
+          stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M10 11v5M14 11v5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -131,7 +149,11 @@ export default function SettingsPage() {
     );
   }
 
-  const meta = SECTION_META[section];
+  const isAdmin = !!capabilities.isAdmin;
+  // A non-admin who lands on ?tab=cleanup (the admin-only section) falls back.
+  const activeSection: Section = section === 'cleanup' && !isAdmin ? 'letters' : section;
+  const navItems = NAV.filter((item) => !item.adminOnly || isAdmin);
+  const meta = SECTION_META[activeSection];
   const emailStatus = settings.status;
 
   return (
@@ -163,14 +185,14 @@ export default function SettingsPage() {
 
         <div className="settings-grid">
           <nav className="settings-nav" aria-label="מקטעי ניהול">
-            {NAV.map((item) => {
+            {navItems.map((item) => {
               const badge = navBadge(item.id);
               return (
                 <button
                   key={item.id}
                   type="button"
                   className="settings-nav-item"
-                  data-active={section === item.id}
+                  data-active={activeSection === item.id}
                   onClick={() => goTo(item.id)}
                 >
                   <span className="settings-nav-icon">{item.icon}</span>
@@ -198,13 +220,14 @@ export default function SettingsPage() {
               <p className="settings-section-desc">{meta.desc}</p>
             </div>
 
-            {section === 'letters' && <LetterStudio settings={settings} notify={notify} />}
-            {section === 'assets' && <AssetsManager settings={settings} notify={notify} />}
-            {section === 'connection' && (
+            {activeSection === 'letters' && <LetterStudio settings={settings} notify={notify} />}
+            {activeSection === 'assets' && <AssetsManager settings={settings} notify={notify} />}
+            {activeSection === 'connection' && (
               <div className="max-w-3xl">
                 <ConnectionPanel settings={settings} notify={notify} adminEmail={capabilities.email} />
               </div>
             )}
+            {activeSection === 'cleanup' && isAdmin && <InquiryAdminPanel notify={notify} />}
           </div>
         </div>
       </div>

@@ -197,6 +197,40 @@ export async function getInquiry(meta: DatasetMeta, inquiryId: string): Promise<
 }
 
 /**
+ * Permanently delete an inquiry and everything attached to it (messages +
+ * history), in a single transaction. This is a hard delete intended for
+ * cleaning up test inquiries — there is no undo.
+ *
+ * NOTE: the inquiry row lives in the db-smart dataset table, which is synced
+ * from the source form. If the originating form response still exists, a future
+ * sync may re-create the row.
+ */
+export async function deleteInquiry(
+  meta: DatasetMeta,
+  inquiryId: string,
+): Promise<{ subject: string } | null> {
+  const existing = await getInquiry(meta, inquiryId);
+  if (!existing) return null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM complaints_messages WHERE inquiry_id = $1', [inquiryId]);
+    await client.query('DELETE FROM complaints_history WHERE inquiry_id = $1', [inquiryId]);
+    await client.query(
+      `DELETE FROM ${quoteIdent(meta.tableName)} WHERE inquiry_id = $1`,
+      [inquiryId],
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return { subject: existing.subject };
+}
+
+/**
  * Mapping from "logical" workflow names to the actual underlying column names.
  * Only workflow columns are present here — sheet-managed columns must never be UPDATEd.
  */
