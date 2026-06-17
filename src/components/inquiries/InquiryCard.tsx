@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
-import StatusPill from '../ui/StatusPill.tsx';
 import PriorityPill from '../ui/PriorityPill.tsx';
 import Avatar from '../ui/Avatar.tsx';
+import { CompactPipeline, StageChip } from './Pipeline.tsx';
 import { computeUrgency, formatRelative } from '../../utils/format.ts';
+import { computePipeline } from '../../utils/pipeline.ts';
 import {
   groupLabel,
   JUSTIFICATION_META,
@@ -43,29 +44,33 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
   const urgencyClass =
     urgency === 'critical' ? 'urgency-critical' : urgency === 'warning' ? 'urgency-warning' : '';
 
+  const pipe = computePipeline({ status: inquiry.status, assigned_group: inquiry.assigned_group });
+
   const assigneeName = inquiry.assigned_user
     ? displayNames[inquiry.assigned_user.toLowerCase()] || inquiry.assigned_user
     : null;
 
   return (
     <Link to={`/inquiries/${inquiry.inquiry_id}`} className="block">
-      <article className={`card card-hover card-interactive fade-in-up ${urgencyClass}`}>
+      <article className={`card card-hover card-interactive fade-in-up flex flex-col ${urgencyClass}`}>
         <header className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <StageChip value={pipe} />
+              {urgency === 'critical' && (
+                <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                  <span className="pill-dot" />
+                  חריגה מ-SLA
+                </span>
+              )}
+            </div>
             <h3 className="line-clamp-2 text-base font-semibold leading-snug">{inquiry.subject}</h3>
             <p className="muted mt-1 line-clamp-2 text-sm leading-relaxed">{inquiry.description}</p>
           </div>
           <PriorityPill priority={inquiry.priority} size="sm" />
         </header>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <StatusPill status={inquiry.status} size="sm" />
-          {urgency === 'critical' && (
-            <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-              <span className="pill-dot" />
-              חריגה מ-SLA
-            </span>
-          )}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {inquiry.assigned_group && (
             <span className="pill bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-200 dark:border-violet-900">
               {groupLabel(inquiry.assigned_group)}
@@ -89,6 +94,11 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
               {JUSTIFICATION_META[inquiry.justification].label}
             </span>
           )}
+        </div>
+
+        {/* Pipeline tracker — at-a-glance progress through the lifecycle. */}
+        <div className="mt-4">
+          <CompactPipeline value={pipe} />
         </div>
 
         <footer className="mt-4 flex items-center justify-between gap-3 border-t border-subtle pt-3 text-xs">

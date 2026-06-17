@@ -625,6 +625,165 @@ html, body {
 }
 
 /* ----------------------------------------------------------------
+ * Pipeline — the spine of the whole UI (לקוח → ניתוב → גורם → מד"ר → לקוח)
+ * --------------------------------------------------------------- */
+/* Per-stage accent. Each element that represents a stage sets data-color and
+ * inherits --stage; light/dark are tuned so colours stay legible on both. */
+.stage[data-color='slate'] { --stage: 100 116 139; --stage-soft: 241 245 249; }
+.stage[data-color='indigo'] { --stage: 99 102 241; --stage-soft: 238 242 255; }
+.stage[data-color='violet'] { --stage: 139 92 246; --stage-soft: 245 243 255; }
+.stage[data-color='amber'] { --stage: 217 119 6; --stage-soft: 254 243 199; }
+.stage[data-color='emerald'] { --stage: 16 185 129; --stage-soft: 209 250 229; }
+.dark .stage[data-color='slate'] { --stage: 148 163 184; --stage-soft: 30 41 59; }
+.dark .stage[data-color='indigo'] { --stage: 129 140 248; --stage-soft: 30 27 75; }
+.dark .stage[data-color='violet'] { --stage: 167 139 250; --stage-soft: 46 16 101; }
+.dark .stage[data-color='amber'] { --stage: 251 191 36; --stage-soft: 69 26 3; }
+.dark .stage[data-color='emerald'] { --stage: 52 211 153; --stage-soft: 6 78 59; }
+
+/* Compact tracker — a connected segmented bar used on cards. */
+.pipe-compact { display: flex; align-items: center; gap: 5px; width: 100%; }
+.pipe-seg {
+  position: relative;
+  height: 5px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgb(var(--border) / 1);
+  transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+.pipe-seg[data-state='done'] { background: rgb(var(--stage) / 1); }
+.pipe-seg[data-state='current'] {
+  background: rgb(var(--stage) / 1);
+  box-shadow: 0 0 0 3px rgb(var(--stage) / 0.18);
+}
+.pipe-seg[data-state='current']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgb(var(--stage) / 1);
+  animation: pipePulse 1.6s ease-in-out infinite;
+}
+@keyframes pipePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* Full stepper — the hero header on the detail page. */
+.stepper { display: flex; align-items: flex-start; gap: 0; }
+.stepper-node {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+/* Connector line that sits behind the dots. In RTL the line should fill toward
+ * the previous (right-hand) node, so we anchor it to the right edge. */
+.stepper-node::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  right: 50%;
+  width: 100%;
+  height: 3px;
+  background: rgb(var(--border) / 1);
+  border-radius: 999px;
+}
+.stepper-node:first-child::before { display: none; }
+.stepper-node[data-line='filled']::before { background: rgb(var(--stage) / 1); }
+.stepper-dot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgb(var(--surface) / 1);
+  border: 3px solid rgb(var(--border) / 1);
+  color: rgb(var(--muted));
+  transition: all 200ms ease;
+}
+.stepper-node[data-state='done'] .stepper-dot {
+  background: rgb(var(--stage) / 1);
+  border-color: rgb(var(--stage) / 1);
+  color: white;
+}
+.dark .stepper-node[data-state='done'] .stepper-dot { color: rgb(var(--surface) / 1); }
+.stepper-node[data-state='current'] .stepper-dot {
+  border-color: rgb(var(--stage) / 1);
+  color: rgb(var(--stage) / 1);
+  box-shadow: 0 0 0 5px rgb(var(--stage) / 0.16);
+}
+.stepper-label { margin-top: 0.55rem; font-size: 0.8rem; font-weight: 600; color: rgb(var(--text-secondary)); }
+.stepper-node[data-state='done'] .stepper-label,
+.stepper-node[data-state='current'] .stepper-label { color: rgb(var(--text)); }
+.stepper-actor { margin-top: 0.15rem; font-size: 0.7rem; color: rgb(var(--muted)); line-height: 1.3; }
+@media (max-width: 640px) {
+  .stepper-actor { display: none; }
+  .stepper-label { font-size: 0.7rem; }
+  .stepper-dot { width: 30px; height: 30px; }
+  .stepper-node::before { top: 14px; }
+}
+
+/* Stage chip — a colour-coded "where it is now" badge. */
+.stage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgb(var(--stage-soft) / 1);
+  color: rgb(var(--stage) / 1);
+  border: 1px solid rgb(var(--stage) / 0.28);
+}
+.dark .stage-chip { color: rgb(var(--stage) / 1); }
+.stage-chip .pill-dot { background: rgb(var(--stage) / 1); }
+
+/* ----------------------------------------------------------------
+ * Dashboard — stat cards, funnel & chart scaffolding
+ * --------------------------------------------------------------- */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--surface) / 1);
+  border: 1px solid rgb(var(--border) / 1);
+  border-radius: 18px;
+  padding: 1.15rem 1.25rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px -16px rgb(15 23 42 / 0.10);
+}
+.stat-card .stat-spark { position: absolute; inset-inline-end: 0; bottom: 0; opacity: 0.5; }
+.stat-accent { position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px; background: rgb(var(--stage) / 1); }
+.stat-label { font-size: 0.78rem; font-weight: 600; color: rgb(var(--muted)); }
+.stat-value { margin-top: 0.35rem; font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+.stat-sub { margin-top: 0.4rem; font-size: 0.74rem; color: rgb(var(--muted)); }
+
+/* Funnel rows — pipeline volume on the dashboard. */
+.funnel-row { display: flex; align-items: center; gap: 0.75rem; }
+.funnel-bar-track { position: relative; flex: 1; height: 2.4rem; border-radius: 12px; background: rgb(var(--surface-sunken) / 1); overflow: hidden; }
+.funnel-bar-fill {
+  height: 100%;
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgb(var(--stage) / 0.85), rgb(var(--stage) / 0.6));
+  display: flex;
+  align-items: center;
+  padding-inline: 0.7rem;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  min-width: 2.5rem;
+  transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dark .funnel-bar-fill { color: rgb(var(--surface) / 1); }
+
+/* Generic horizontal bar (breakdowns). */
+.dash-bar-track { height: 0.55rem; border-radius: 999px; background: rgb(var(--surface-sunken) / 1); overflow: hidden; }
+.dash-bar-fill { height: 100%; border-radius: 999px; transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+.legend-dot { width: 0.6rem; height: 0.6rem; border-radius: 3px; flex-shrink: 0; }
+
+/* ----------------------------------------------------------------
  * Utility colors / helpers
  * --------------------------------------------------------------- */
 .muted { color: rgb(var(--muted)); }

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../utils/api.ts';
 import InquiryCard, { type InquirySummary } from '../components/inquiries/InquiryCard.tsx';
 import InquiryFilters, { type FilterValues } from '../components/inquiries/InquiryFilters.tsx';
+import { PipelineLegend } from '../components/inquiries/Pipeline.tsx';
 import Empty from '../components/ui/Empty.tsx';
 import { GROUP_LABELS, STATUS } from '../utils/constants.ts';
 import useCapabilities from '../hooks/useCapabilities.ts';
@@ -197,15 +198,20 @@ export default function InboxPage({ view = 'inbox' }: InboxPageProps) {
 
   return (
     <div className="container-max py-6 md:py-8">
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
-          <p className="muted mt-1 text-sm">{pageSubtitle}</p>
+      <header className="mb-5 overflow-hidden rounded-2xl border border-subtle bg-gradient-to-l from-indigo-50/60 via-surface to-surface p-5 dark:from-indigo-950/30 dark:via-surface dark:to-surface">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
+            <p className="muted mt-1 text-sm">{pageSubtitle}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isClosed && <KpiChip label="פתוחות" value={scopeCounts.all} tone="neutral" />}
+            {isClosed && <KpiChip label="סגורות" value={listTotal} tone="neutral" />}
+            {stats.urgent > 0 && <KpiChip label="דחופות" value={stats.urgent} tone="danger" />}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!isClosed && <KpiChip label="פתוחות" value={scopeCounts.all} tone="neutral" />}
-          {isClosed && <KpiChip label="סגורות" value={listTotal} tone="neutral" />}
-          {stats.urgent > 0 && <KpiChip label="דחופות" value={stats.urgent} tone="danger" />}
+        <div className="mt-4 border-t border-subtle/70 pt-3">
+          <PipelineLegend />
         </div>
       </header>
 

@@ -137,9 +137,28 @@ export default function SettingsPage() {
   return (
     <div className="settings-shell pb-12">
       <div className="settings-container pt-6 md:pt-8">
-        <header className="mb-5">
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">ניהול</h1>
-          <p className="muted mt-1 text-sm">מכתבי סגירה, נכסים גרפיים וחיבור Gmail</p>
+        <header className="mb-5 overflow-hidden rounded-2xl border border-subtle bg-gradient-to-l from-indigo-50/60 via-surface to-surface p-5 dark:from-indigo-950/30 dark:via-surface dark:to-surface">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">ניהול</h1>
+              <p className="muted mt-1 text-sm">מכתבי סגירה, נכסים גרפיים וחיבור Gmail — כלי הקצה של מסע הפנייה</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`pill ${
+                  emailStatus.connected
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                }`}
+                title={emailStatus.gmailAddress || undefined}
+              >
+                <span className="pill-dot" />
+                {emailStatus.connected ? `Gmail מחובר${emailStatus.gmailAddress ? ` · ${emailStatus.gmailAddress}` : ''}` : 'Gmail לא מחובר'}
+              </span>
+              <span className="pill pill-neutral">{settings.drafts.length} טיוטות</span>
+              <span className="pill pill-neutral">{settings.assets.length} נכסים</span>
+            </div>
+          </div>
         </header>
 
         <div className="settings-grid">

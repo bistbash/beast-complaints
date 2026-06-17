@@ -489,33 +489,93 @@ function dedupedTableSql(table: string, whereSql = ''): string {
 export async function getStats(meta: DatasetMeta) {
   const table = quoteIdent(meta.tableName);
   const deduped = dedupedTableSql(table);
-  const [byStatus, byPriority, byGroup, slaBreaches, avgResolution] = await Promise.all([
-    pool.query<{ status: string; count: number }>(
-      `SELECT status, COUNT(*)::int AS count FROM ${deduped} GROUP BY status`,
-    ),
-    pool.query<{ priority: string; count: number }>(
-      `SELECT priority, COUNT(*)::int AS count FROM ${deduped} GROUP BY priority`,
-    ),
-    pool.query<{ assigned_group: string | null; count: number }>(
-      `SELECT assigned_group, COUNT(*)::int AS count FROM ${deduped} GROUP BY assigned_group`,
-    ),
-    pool.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM ${deduped}
-        WHERE due_at IS NOT NULL AND due_at < NOW()
-          AND status NOT IN ('closed')`,
-    ),
-    pool.query<{ avg_hours: number | null }>(
-      `SELECT AVG(EXTRACT(EPOCH FROM (closed_at - created_at))/3600)::float AS avg_hours
-         FROM ${deduped} WHERE closed_at IS NOT NULL`,
-    ),
-  ]);
+  const [byStatus, byPriority, byGroup, byCategory, slaBreaches, avgResolution, timings, createdTrend, closedTrend] =
+    await Promise.all([
+      pool.query<{ status: string; count: number }>(
+        `SELECT status, COUNT(*)::int AS count FROM ${deduped} GROUP BY status`,
+      ),
+      pool.query<{ priority: string; count: number }>(
+        `SELECT priority, COUNT(*)::int AS count FROM ${deduped} GROUP BY priority`,
+      ),
+      pool.query<{ assigned_group: string | null; count: number }>(
+        `SELECT assigned_group, COUNT(*)::int AS count FROM ${deduped} GROUP BY assigned_group`,
+      ),
+      pool.query<{ category: string | null; count: number }>(
+        `SELECT request_category AS category, COUNT(*)::int AS count FROM ${deduped} GROUP BY request_category`,
+      ),
+      pool.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM ${deduped}
+          WHERE due_at IS NOT NULL AND due_at < NOW()
+            AND status NOT IN ('closed')`,
+      ),
+      pool.query<{ avg_hours: number | null }>(
+        `SELECT AVG(EXTRACT(EPOCH FROM (closed_at - created_at))/3600)::float AS avg_hours
+           FROM ${deduped} WHERE closed_at IS NOT NULL`,
+      ),
+      // Average time spent in each pipeline stage + median end-to-end resolution.
+      pool.query<{
+        avg_route_hours: number | null;
+        avg_team_hours: number | null;
+        avg_manager_hours: number | null;
+        median_resolution_hours: number | null;
+      }>(
+        `SELECT
+            AVG(EXTRACT(EPOCH FROM (routed_at - created_at))/3600)
+              FILTER (WHERE routed_at IS NOT NULL AND routed_at >= created_at)::float AS avg_route_hours,
+            AVG(EXTRACT(EPOCH FROM (team_response_at - routed_at))/3600)
+              FILTER (WHERE team_response_at IS NOT NULL AND routed_at IS NOT NULL AND team_response_at >= routed_at)::float AS avg_team_hours,
+            AVG(EXTRACT(EPOCH FROM (manager_response_at - team_response_at))/3600)
+              FILTER (WHERE manager_response_at IS NOT NULL AND team_response_at IS NOT NULL AND manager_response_at >= team_response_at)::float AS avg_manager_hours,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (
+              ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at))/3600
+            ) AS median_resolution_hours
+          FROM ${deduped}`,
+      ),
+      // Weekly created/closed counts over the last 12 ISO weeks (oldest → newest).
+      pool.query<{ week: string; count: number }>(
+        `SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS week, COUNT(*)::int AS count
+           FROM ${deduped}
+          WHERE created_at >= date_trunc('week', NOW()) - INTERVAL '11 weeks'
+          GROUP BY 1 ORDER BY 1`,
+      ),
+      pool.query<{ week: string; count: number }>(
+        `SELECT to_char(date_trunc('week', closed_at), 'YYYY-MM-DD') AS week, COUNT(*)::int AS count
+           FROM ${deduped}
+          WHERE closed_at IS NOT NULL AND closed_at >= date_trunc('week', NOW()) - INTERVAL '11 weeks'
+          GROUP BY 1 ORDER BY 1`,
+      ),
+    ]);
 
+  // Build a contiguous 12-week skeleton so the trend chart never has gaps.
+  const createdByWeek = new Map(createdTrend.rows.map((r) => [r.week, r.count]));
+  const closedByWeek = new Map(closedTrend.rows.map((r) => [r.week, r.count]));
+  const trend: Array<{ week: string; created: number; closed: number }> = [];
+  const monday = new Date();
+  monday.setUTCHours(0, 0, 0, 0);
+  // Move to the Monday of the current ISO week.
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() - i * 7);
+    const key = d.toISOString().slice(0, 10);
+    trend.push({ week: key, created: createdByWeek.get(key) ?? 0, closed: closedByWeek.get(key) ?? 0 });
+  }
+
+  const t = timings.rows[0];
   return {
     byStatus: byStatus.rows,
     byPriority: byPriority.rows,
     byGroup: byGroup.rows,
+    byCategory: byCategory.rows,
     slaBreaches: slaBreaches.rows[0]?.count ?? 0,
     avgResolutionHours: avgResolution.rows[0]?.avg_hours ?? null,
+    timings: {
+      avgRouteHours: t?.avg_route_hours ?? null,
+      avgTeamHours: t?.avg_team_hours ?? null,
+      avgManagerHours: t?.avg_manager_hours ?? null,
+      medianResolutionHours: t?.median_resolution_hours ?? null,
+    },
+    trend,
   };
 }
 

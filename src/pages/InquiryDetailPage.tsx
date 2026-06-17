@@ -10,6 +10,8 @@ import ErrorShell from '../components/layout/ErrorShell.tsx';
 import MessageThread from '../components/inquiries/MessageThread.tsx';
 import StatusTimeline from '../components/inquiries/StatusTimeline.tsx';
 import RoutingDialog from '../components/inquiries/RoutingDialog.tsx';
+import { FullPipeline, StageChip } from '../components/inquiries/Pipeline.tsx';
+import { computePipeline } from '../utils/pipeline.ts';
 import Avatar from '../components/ui/Avatar.tsx';
 import useCapabilities from '../hooks/useCapabilities.ts';
 import { useToast } from '../hooks/useToast.ts';
@@ -248,6 +250,7 @@ export default function InquiryDetailPage() {
 
   const { inquiry, messages, history, displayNames } = data;
   const urgency = computeUrgency(inquiry.created_at, inquiry.due_at, inquiry.status);
+  const pipe = computePipeline(inquiry);
   const isAssignee = capabilities?.email?.toLowerCase() === inquiry.assigned_user?.toLowerCase();
   const canWriteTeamResponse =
     inquiry.status === STATUS.ROUTED &&
@@ -262,27 +265,36 @@ export default function InquiryDetailPage() {
         ← חזור
       </button>
 
+      {/* === Pipeline hero — the journey of this inquiry === */}
+      <section className="surface-card mb-6 p-5 md:p-6">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-bold leading-tight">{inquiry.subject}</h1>
+            <div className="muted mt-1 text-xs">
+              הוגשה {formatRelative(inquiry.created_at)} · {formatDateTime(inquiry.created_at)}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StageChip value={pipe} />
+            <PriorityPill priority={inquiry.priority} />
+            {urgency === 'critical' && (
+              <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
+                <span className="pill-dot" />
+                חריגה מ-SLA
+              </span>
+            )}
+          </div>
+        </div>
+        <FullPipeline value={pipe} />
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-[1fr,360px]">
         <main className="space-y-5">
           {/* === Inquiry overview === */}
           <Card className={urgency === 'critical' ? 'urgency-critical' : urgency === 'warning' ? 'urgency-warning' : ''}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h1 className="text-xl font-bold leading-tight">{inquiry.subject}</h1>
-                <div className="muted mt-1 text-xs">
-                  הוגשה {formatRelative(inquiry.created_at)} · {formatDateTime(inquiry.created_at)}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusPill status={inquiry.status} />
-                <PriorityPill priority={inquiry.priority} />
-                {urgency === 'critical' && (
-                  <span className="pill border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-                    <span className="pill-dot" />
-                    חריגה מ-SLA
-                  </span>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <StatusPill status={inquiry.status} />
+              <span className="muted text-xs">עדכון אחרון {formatRelative(inquiry.last_activity_at)}</span>
             </div>
 
             <div className="mt-4 rounded-xl bg-surface-elevated p-4">
