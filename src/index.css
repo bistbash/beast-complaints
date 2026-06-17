@@ -677,13 +677,16 @@ html, body {
   text-align: center;
   min-width: 0;
 }
-/* Connector line that sits behind the dots. In RTL the line should fill toward
- * the previous (right-hand) node, so we anchor it to the right edge. */
+/* Connector line that sits behind the dots. Each node draws the segment that
+ * leads into it from its previous sibling — which in RTL sits to the right.
+ * Anchor the line at the node centre (left:50%) and extend it rightward by one
+ * node width so it reaches the right-hand neighbour's dot without overflowing
+ * the track. The first node (rightmost, the start) draws no incoming line. */
 .stepper-node::before {
   content: '';
   position: absolute;
   top: 17px;
-  right: 50%;
+  left: 50%;
   width: 100%;
   height: 3px;
   background: rgb(var(--border) / 1);
