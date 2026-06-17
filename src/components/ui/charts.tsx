@@ -25,8 +25,15 @@ export function Donut({ data, size = 168, thickness = 22, centerValue, centerLab
   const cx = size / 2;
   let offset = 0;
 
+  // Describe the distribution in words so assistive tech conveys the data,
+  // not just "image".
+  const ariaLabel =
+    total > 0
+      ? `התפלגות: ${data.map((d) => `${d.label} ${d.value}`).join(', ')}`
+      : 'התפלגות — אין נתונים';
+
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="התפלגות">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={ariaLabel}>
       <g transform={`rotate(-90 ${cx} ${cx})`}>
         <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgb(var(--surface-sunken) / 1)" strokeWidth={thickness} />
         {total > 0 &&
@@ -94,8 +101,13 @@ export function TrendChart({ series, labels, height = 220 }: {
   const x = (i: number) => padX + plotW - (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const y = (v: number) => padTop + plotH - (v / max) * plotH;
 
+  // Summarise each series total so the chart is meaningful without sight.
+  const ariaLabel = `מגמה לאורך זמן — ${series
+    .map((s) => `${s.label}: ${s.points.reduce((a, b) => a + b, 0)} סה"כ`)
+    .join('; ')}`;
+
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="מגמה לאורך זמן">
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel}>
       {/* horizontal gridlines */}
       {[0, 0.25, 0.5, 0.75, 1].map((g) => (
         <line key={g} x1={padX} x2={W - padX} y1={padTop + plotH * g} y2={padTop + plotH * g}

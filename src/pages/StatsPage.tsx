@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../utils/api.ts';
 import { STATUS_META, PRIORITY_META, CATEGORIES, groupLabel } from '../utils/constants.ts';
 import LoadingScreen from '../components/layout/LoadingScreen.tsx';
+import Empty from '../components/ui/Empty.tsx';
 import { PIPELINE_STAGES } from '../utils/pipeline.ts';
 import { PipelineLegend } from '../components/inquiries/Pipeline.tsx';
 import { Donut, TrendChart } from '../components/ui/charts.tsx';
@@ -60,7 +61,16 @@ export default function StatsPage() {
   if (!stats) {
     return (
       <div className="container-max py-8">
-        <p className="muted">אין נתונים זמינים.</p>
+        <Empty
+          icon={
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M3 3v18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7 14l3-3 3 3 4-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          }
+          title="אין עדיין נתונים להצגה"
+          description="כשייכנסו פניות למערכת, לוח הבקרה יתמלא בנתונים ומגמות."
+        />
       </div>
     );
   }
