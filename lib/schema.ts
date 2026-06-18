@@ -144,7 +144,9 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
       ADD COLUMN IF NOT EXISTS due_at                timestamptz,
       ADD COLUMN IF NOT EXISTS closing_email_sent_at timestamptz,
       ADD COLUMN IF NOT EXISTS sla_reminded_at       timestamptz,
-      ADD COLUMN IF NOT EXISTS legacy_id             text
+      ADD COLUMN IF NOT EXISTS legacy_id             text,
+      ADD COLUMN IF NOT EXISTS deleted_at            timestamptz,
+      ADD COLUMN IF NOT EXISTS deleted_by            text
   `);
 
   // ADD COLUMN IF NOT EXISTS does not add DEFAULTs when the column already exists

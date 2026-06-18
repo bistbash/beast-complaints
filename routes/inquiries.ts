@@ -685,8 +685,11 @@ router.delete('/:id', async (req, res, next) => {
       res.status(400).json({ error: 'שם הפנייה שהוקלד אינו תואם — המחיקה בוטלה' });
       return;
     }
-    await deleteInquiry(meta, req.params.id);
-    res.json({ ok: true, deleted: { inquiry_id: req.params.id, subject: existing.subject } });
+    const result = await deleteInquiry(meta, req.params.id, caps.email);
+    res.json({
+      ok: true,
+      deleted: { inquiry_id: req.params.id, subject: existing.subject, hidden: result?.hidden ?? 0 },
+    });
   } catch (err) {
     next(err);
   }

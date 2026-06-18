@@ -113,6 +113,7 @@ export const HISTORY_ACTION = {
   COMMENT_ADDED: 'comment_added',
   CLOSING_EMAIL_SENT: 'closing_email_sent',
   SLA_BREACH: 'sla_breach',
+  DELETED: 'deleted',
 } as const;
 
 export type HistoryAction = (typeof HISTORY_ACTION)[keyof typeof HISTORY_ACTION];

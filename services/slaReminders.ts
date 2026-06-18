@@ -73,6 +73,7 @@ export async function runSlaReminderSweep(meta: DatasetMeta, limit = 200): Promi
     `SELECT inquiry_id, title AS subject, status, assigned_user, assigned_group
        FROM ${table}
       WHERE inquiry_id IS NOT NULL
+        AND deleted_at IS NULL
         AND status IN ('new','routed','awaiting_manager')
         AND due_at IS NOT NULL
         AND due_at < NOW()

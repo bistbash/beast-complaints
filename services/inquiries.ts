@@ -14,7 +14,12 @@ import {
   type JustificationDecision,
 } from '../lib/constants.ts';
 import type { DatasetMeta, InquiryRow, MessageRow, HistoryRow } from '../lib/types.ts';
-import { INQUIRY_DEDUPE_ORDER, INQUIRY_DEDUPE_PARTITION, inquiryListOrderSql } from '../lib/inquiryDedupe.ts';
+import {
+  INQUIRY_DEDUPE_DESCRIPTION_KEY,
+  INQUIRY_DEDUPE_ORDER,
+  INQUIRY_DEDUPE_PARTITION,
+  inquiryListOrderSql,
+} from '../lib/inquiryDedupe.ts';
 import { humanizeIdentifier } from '../lib/humanize.ts';
 
 /**
@@ -127,6 +132,8 @@ export async function listInquiries(meta: DatasetMeta, query: ListInquiriesQuery
 
   // Rows without inquiry_id are sheet-only ghosts from db-smart sync — ignore them.
   where.push(`inquiry_id IS NOT NULL`);
+  // Soft-deleted inquiries are hidden everywhere in the app.
+  where.push(`deleted_at IS NULL`);
 
   if (query.open === true) {
     where.push(`status IN ('new','routed','awaiting_manager')`);
@@ -190,44 +197,57 @@ export async function listInquiries(meta: DatasetMeta, query: ListInquiriesQuery
 
 export async function getInquiry(meta: DatasetMeta, inquiryId: string): Promise<InquiryRow | null> {
   const res = await pool.query<InquiryRow>(
-    `SELECT ${INQUIRY_SELECT} FROM ${quoteIdent(meta.tableName)} WHERE inquiry_id = $1`,
+    `SELECT ${INQUIRY_SELECT} FROM ${quoteIdent(meta.tableName)} WHERE inquiry_id = $1 AND deleted_at IS NULL`,
     [inquiryId],
   );
   return res.rows[0] ?? null;
 }
 
 /**
- * Permanently delete an inquiry and everything attached to it (messages +
- * history), in a single transaction. This is a hard delete intended for
- * cleaning up test inquiries — there is no undo.
+ * Soft-delete an inquiry: hide it (and its near-duplicate siblings) from the app.
  *
- * NOTE: the inquiry row lives in the db-smart dataset table, which is synced
- * from the source form. If the originating form response still exists, a future
- * sync may re-create the row.
+ * Why soft and not a hard DELETE: the row lives in the db-smart dataset table, which is
+ * synced from the Google Form. A hard delete only removes the local row, so the next
+ * Sheet→DB sync re-inserts it from the still-present form response (as a fresh "new" row) and
+ * the complaint reappears. Keeping the row but stamping deleted_at means the sync sees a PK
+ * conflict and only updates the sheet columns — deleted_at (a workflow column the sync never
+ * touches) is preserved, so the inquiry stays hidden.
+ *
+ * We hide the whole (email, title, description) duplicate group — the same partition the list
+ * view dedups on — so a sibling copy can't take the deleted one's place. Messages and history
+ * are kept (soft delete is reversible by clearing deleted_at).
  */
 export async function deleteInquiry(
   meta: DatasetMeta,
   inquiryId: string,
-): Promise<{ subject: string } | null> {
+  actorEmail: string,
+): Promise<{ subject: string; hidden: number } | null> {
   const existing = await getInquiry(meta, inquiryId);
   if (!existing) return null;
+  const table = quoteIdent(meta.tableName);
+  const targetSub = (expr: string) => `(SELECT ${expr} FROM ${table} WHERE inquiry_id = $1)`;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM complaints_messages WHERE inquiry_id = $1', [inquiryId]);
-    await client.query('DELETE FROM complaints_history WHERE inquiry_id = $1', [inquiryId]);
-    await client.query(
-      `DELETE FROM ${quoteIdent(meta.tableName)} WHERE inquiry_id = $1`,
-      [inquiryId],
+    const res = await client.query<{ inquiry_id: string }>(
+      `UPDATE ${table}
+          SET deleted_at = NOW(), deleted_by = $2
+        WHERE deleted_at IS NULL
+          AND LOWER(TRIM(email)) IS NOT DISTINCT FROM ${targetSub('LOWER(TRIM(email))')}
+          AND title IS NOT DISTINCT FROM ${targetSub('title')}
+          AND ${INQUIRY_DEDUPE_DESCRIPTION_KEY} IS NOT DISTINCT FROM ${targetSub(INQUIRY_DEDUPE_DESCRIPTION_KEY)}
+        RETURNING inquiry_id`,
+      [inquiryId, actorEmail],
     );
+    await logHistory(client, inquiryId, actorEmail, HISTORY_ACTION.DELETED, { hidden: res.rowCount });
     await client.query('COMMIT');
+    return { subject: existing.subject, hidden: res.rowCount ?? 0 };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
-  return { subject: existing.subject };
 }
 
 /**
@@ -506,6 +526,8 @@ export async function logHistory(
 }
 
 function dedupedTableSql(table: string, whereSql = ''): string {
+  // Soft-deleted rows must never count toward stats.
+  const base = whereSql.trim() ? `${whereSql} AND deleted_at IS NULL` : `WHERE deleted_at IS NULL`;
   return `(
     SELECT deduped.*
     FROM (
@@ -514,7 +536,7 @@ function dedupedTableSql(table: string, whereSql = ''): string {
         ORDER BY ${INQUIRY_DEDUPE_ORDER}
       ) AS _dedupe_rank
       FROM ${table}
-      ${whereSql}
+      ${base}
     ) deduped
     WHERE deduped._dedupe_rank = 1
   ) inquiries`;
