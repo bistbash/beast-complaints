@@ -450,6 +450,74 @@ export async function reopenInquiry(
   return updated;
 }
 
+/**
+ * Workflow timestamp columns an admin/manager may retroactively correct via the
+ * hidden date editor on the inquiry screen. Sheet-managed columns (e.g. the raw
+ * form "timestamp") are intentionally excluded — only workflow columns are safe
+ * to overwrite, since the db-smart sync never touches them.
+ */
+export const EDITABLE_DATE_COLUMNS = [
+  'created_at',
+  'due_at',
+  'routed_at',
+  'team_response_at',
+  'manager_response_at',
+  'justification_at',
+  'closed_at',
+  'closing_email_sent_at',
+] as const;
+
+export type EditableDateColumn = (typeof EDITABLE_DATE_COLUMNS)[number];
+
+const EDITABLE_DATE_SET = new Set<string>(EDITABLE_DATE_COLUMNS);
+
+/**
+ * Retroactively edit one or more workflow dates on an inquiry. Each value may be
+ * an ISO string / date-parseable string to set, or null/'' to clear the column.
+ * Unlike the normal workflow mutations, this deliberately does NOT bump
+ * last_activity_at — a data correction shouldn't reshuffle the inbox ordering.
+ */
+export async function updateInquiryDates(
+  meta: DatasetMeta,
+  inquiryId: string,
+  dates: Record<string, string | null | undefined>,
+  actorEmail: string,
+): Promise<InquiryRow | null> {
+  const previous = await getInquiry(meta, inquiryId);
+  if (!previous) return null;
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  const changed: Record<string, { from: unknown; to: string | null }> = {};
+  let i = 1;
+
+  for (const [name, raw] of Object.entries(dates)) {
+    if (!EDITABLE_DATE_SET.has(name)) continue;
+    let iso: string | null = null;
+    if (raw != null && String(raw).trim() !== '') {
+      const d = new Date(raw);
+      if (Number.isNaN(d.getTime())) {
+        const err = new Error(`ערך תאריך לא חוקי בשדה "${name}"`);
+        (err as { status?: number }).status = 400;
+        throw err;
+      }
+      iso = d.toISOString();
+    }
+    sets.push(`${quoteIdent(name)} = $${i++}`);
+    values.push(iso);
+    changed[name] = { from: (previous as unknown as Record<string, unknown>)[name] ?? null, to: iso };
+  }
+
+  if (!sets.length) return previous;
+  values.push(inquiryId);
+  await pool.query(
+    `UPDATE ${quoteIdent(meta.tableName)} SET ${sets.join(', ')} WHERE inquiry_id = $${i} AND deleted_at IS NULL`,
+    values,
+  );
+  await logHistory(pool, inquiryId, actorEmail, HISTORY_ACTION.DATES_EDITED, { changed });
+  return getInquiry(meta, inquiryId);
+}
+
 export async function changePriority(
   meta: DatasetMeta,
   inquiryId: string,

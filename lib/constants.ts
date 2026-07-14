@@ -114,6 +114,7 @@ export const HISTORY_ACTION = {
   CLOSING_EMAIL_SENT: 'closing_email_sent',
   SLA_BREACH: 'sla_breach',
   DELETED: 'deleted',
+  DATES_EDITED: 'dates_edited',
 } as const;
 
 export type HistoryAction = (typeof HISTORY_ACTION)[keyof typeof HISTORY_ACTION];

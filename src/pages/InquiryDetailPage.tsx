@@ -10,6 +10,7 @@ import ErrorShell from '../components/layout/ErrorShell.tsx';
 import MessageThread from '../components/inquiries/MessageThread.tsx';
 import StatusTimeline from '../components/inquiries/StatusTimeline.tsx';
 import RoutingDialog from '../components/inquiries/RoutingDialog.tsx';
+import DateEditorDialog from '../components/inquiries/DateEditorDialog.tsx';
 import { FullPipeline, StageChip } from '../components/inquiries/Pipeline.tsx';
 import { computePipeline } from '../utils/pipeline.ts';
 import Avatar from '../components/ui/Avatar.tsx';
@@ -115,6 +116,7 @@ export default function InquiryDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [showRouting, setShowRouting] = useState(false);
+  const [showDateEditor, setShowDateEditor] = useState(false);
   const [teamDraft, setTeamDraft] = useState('');
   const [managerDraft, setManagerDraft] = useState('');
   const [managerVerdict, setManagerVerdict] = useState<JustificationDecision | null>(null);
@@ -142,6 +144,21 @@ export default function InquiryDetailPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Secret shortcut: Ctrl+Alt+D (⌘+⌥+D on Mac) opens the hidden date editor.
+  // Only wired up for managers/admins — the backend enforces the same gate.
+  const canEditDates = !!(capabilities?.isManager || capabilities?.isAdmin);
+  useEffect(() => {
+    if (!canEditDates) return;
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        setShowDateEditor(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canEditDates]);
 
   async function postComment(content: string) {
     if (!id) return;
@@ -643,6 +660,28 @@ export default function InquiryDetailPage() {
         capabilities={capabilities}
         onRouted={refresh}
       />
+
+      {canEditDates && (
+        <DateEditorDialog
+          open={showDateEditor}
+          onClose={() => setShowDateEditor(false)}
+          inquiryId={inquiry.inquiry_id}
+          values={{
+            created_at: inquiry.created_at,
+            due_at: inquiry.due_at,
+            routed_at: inquiry.routed_at,
+            team_response_at: inquiry.team_response_at,
+            manager_response_at: inquiry.manager_response_at,
+            justification_at: inquiry.justification_at,
+            closed_at: inquiry.closed_at,
+            closing_email_sent_at: inquiry.closing_email_sent_at,
+          }}
+          onSaved={() => {
+            void refresh();
+            notify('ok', 'תאריכי הפנייה עודכנו.');
+          }}
+        />
+      )}
 
       {toast && (
         <div

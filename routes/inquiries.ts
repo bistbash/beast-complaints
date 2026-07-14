@@ -29,6 +29,8 @@ import {
   submitManagerResponse,
   setJustification,
   markClosingEmailSent,
+  updateInquiryDates,
+  EDITABLE_DATE_COLUMNS,
 } from '../services/inquiries.ts';
 import {
   STATUS,
@@ -713,6 +715,50 @@ router.post('/:id/priority', async (req, res, next) => {
       return;
     }
     const updated = await changePriority(meta, req.params.id, priority, caps.email);
+    if (!updated) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
+    }
+    res.json({ inquiry: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Retroactively edit an inquiry's workflow dates. Hidden feature — reached only
+ * via a secret keyboard shortcut in the UI — for correcting timestamps on
+ * back-filled / mis-synced rows. Restricted to managers and system admins.
+ */
+router.post('/:id/dates', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const meta = await requireDataset();
+    const caps = buildCapabilities(req.user);
+    if (!caps.isManager && !caps.isAdmin) {
+      res.status(403).json({ error: 'רק מנהל יכול לערוך את תאריכי הפנייה' });
+      return;
+    }
+    const dates = (req.body?.dates ?? req.body) as Record<string, unknown> | undefined;
+    if (!dates || typeof dates !== 'object' || Array.isArray(dates)) {
+      res.status(400).json({ error: 'נדרש אובייקט תאריכים' });
+      return;
+    }
+    const patch: Record<string, string | null> = {};
+    for (const col of EDITABLE_DATE_COLUMNS) {
+      if (Object.prototype.hasOwnProperty.call(dates, col)) {
+        const value = dates[col];
+        patch[col] = value == null ? null : String(value);
+      }
+    }
+    if (!Object.keys(patch).length) {
+      res.status(400).json({ error: 'לא צויין אף תאריך חוקי לעדכון' });
+      return;
+    }
+    const updated = await updateInquiryDates(meta, req.params.id, patch, caps.email);
     if (!updated) {
       res.status(404).json({ error: 'הפנייה לא נמצאה' });
       return;

@@ -97,6 +97,7 @@ export const HISTORY_LABELS: Record<string, string> = {
   comment_added: 'נוספה תגובה',
   closing_email_sent: 'נשלח מייל סיום',
   sla_breach: 'חריגה מיעד הטיפול (SLA)',
+  dates_edited: 'התאריכים עודכנו ידנית',
 };
 
 export const JUSTIFICATION = {
