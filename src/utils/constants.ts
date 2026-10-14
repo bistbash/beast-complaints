@@ -71,6 +71,15 @@ export function groupLabel(key: string | null | undefined): string {
   return GROUP_LABELS[normalized] || key;
 }
 
+/** Same comparison the server uses: case-insensitive, `_` and spaces are equivalent. */
+export function groupsMatch(a: string, b: string): boolean {
+  const norm = (value: string) => {
+    const v = value.trim().toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ');
+    return v === 'teachers' ? 'morim' : v;
+  };
+  return norm(a) === norm(b);
+}
+
 export const MESSAGE_TYPE = {
   COMMENT: 'comment',
   SYSTEM: 'system',

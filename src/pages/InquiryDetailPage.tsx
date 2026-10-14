@@ -23,6 +23,7 @@ import {
   JUSTIFICATION,
   JUSTIFICATION_META,
   groupLabel,
+  groupsMatch,
   type InquiryStatus,
   type InquiryPriority,
   type JustificationDecision,
@@ -116,6 +117,7 @@ export default function InquiryDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const [showRouting, setShowRouting] = useState(false);
+  const [routingPrefillSelf, setRoutingPrefillSelf] = useState(false);
   const [showDateEditor, setShowDateEditor] = useState(false);
   const [teamDraft, setTeamDraft] = useState('');
   const [managerDraft, setManagerDraft] = useState('');
@@ -164,6 +166,39 @@ export default function InquiryDetailPage() {
     if (!id) return;
     await api.post(`/api/inquiries/${id}/messages`, { content });
     await refresh();
+  }
+
+  async function assignToSelf() {
+    if (!id || !data) return;
+    if (data.inquiry.status === STATUS.NEW && (capabilities?.manageableGroups.length ?? 0) !== 1) {
+      setRoutingPrefillSelf(true);
+      setShowRouting(true);
+      return;
+    }
+    setActing(true);
+    try {
+      const res = await api.post(`/api/inquiries/${id}/assign-self`);
+      const nextStatus = res.data?.inquiry?.status as string | undefined;
+      if (nextStatus === STATUS.AWAITING_MANAGER) {
+        notify(
+          'ok',
+          'הפנייה שויכה אליך ועברה להתייחסות סופית. התגובה שתכתוב תסגור את הפנייה ותישלח לפונה במייל.',
+        );
+      } else {
+        notify('ok', 'הפנייה שויכה אליך.');
+      }
+      await refresh();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string; needsGroup?: boolean } } };
+      if (e.response?.data?.needsGroup) {
+        setRoutingPrefillSelf(true);
+        setShowRouting(true);
+        return;
+      }
+      notify('err', e.response?.data?.error || 'השיוך נכשל');
+    } finally {
+      setActing(false);
+    }
   }
 
   async function submitTeamResponse() {
@@ -269,12 +304,28 @@ export default function InquiryDetailPage() {
   const urgency = computeUrgency(inquiry.created_at, inquiry.due_at, inquiry.status);
   const pipe = computePipeline(inquiry);
   const isAssignee = capabilities?.email?.toLowerCase() === inquiry.assigned_user?.toLowerCase();
+  const isOpen = inquiry.status !== STATUS.CLOSED;
   const canWriteTeamResponse =
     inquiry.status === STATUS.ROUTED &&
     (isAssignee || capabilities?.isKeva || capabilities?.isAdmin || capabilities?.isNavigator);
   const canWriteManagerResponse =
     inquiry.status === STATUS.AWAITING_MANAGER && !!capabilities?.isManager;
-  const isOpen = inquiry.status !== STATUS.CLOSED;
+  const inAssignedGroup =
+    !!inquiry.assigned_group &&
+    (capabilities?.groups || []).some((g) => groupsMatch(inquiry.assigned_group!, g));
+  const canManageAssignedGroup =
+    !!inquiry.assigned_group &&
+    (capabilities?.manageableGroups || []).some((g) => groupsMatch(inquiry.assigned_group!, g));
+  const takenByOther = !!inquiry.assigned_user && !isAssignee;
+  const canClaim =
+    isOpen &&
+    !isAssignee &&
+    inquiry.status !== STATUS.AWAITING_MANAGER &&
+    ((inquiry.status === STATUS.ROUTED &&
+      !!inquiry.assigned_group &&
+      (inAssignedGroup || canManageAssignedGroup) &&
+      (!takenByOther || !!capabilities?.canRoute)) ||
+      (inquiry.status === STATUS.NEW && !!capabilities?.canRoute));
 
   return (
     <div className="container-max py-6 md:py-8">
@@ -321,8 +372,21 @@ export default function InquiryDetailPage() {
 
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-subtle pt-4">
               {isOpen && capabilities?.canRoute && (
-                <Button variant="accent" size="sm" onClick={() => setShowRouting(true)} disabled={acting}>
+                <Button
+                  variant="accent"
+                  size="sm"
+                  onClick={() => {
+                    setRoutingPrefillSelf(false);
+                    setShowRouting(true);
+                  }}
+                  disabled={acting}
+                >
                   {inquiry.assigned_group ? 'נתב מחדש' : 'נתב פנייה'}
+                </Button>
+              )}
+              {canClaim && (
+                <Button variant="primary" size="sm" onClick={assignToSelf} loading={acting}>
+                  שייך אליי
                 </Button>
               )}
               {!isOpen && capabilities?.isManager && (
@@ -334,7 +398,7 @@ export default function InquiryDetailPage() {
           </Card>
 
           {/* === Team Response section (pipeline stage: team / violet) === */}
-          {(canWriteTeamResponse || inquiry.team_response) && (
+          {(canWriteTeamResponse || inquiry.team_response || (canClaim && inquiry.status === STATUS.ROUTED)) && (
             <Card className="stage" data-color="violet">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -355,6 +419,15 @@ export default function InquiryDetailPage() {
                 </p>
               ) : (
                 <p className="muted mt-2 text-sm">אין עדיין התייחסות צוות.</p>
+              )}
+
+              {canClaim && !canWriteTeamResponse && !inquiry.team_response && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p className="muted text-sm">הפנייה ממתינה לגורם מטפל. שייך אותה אליך כדי לכתוב את התגובה.</p>
+                  <Button variant="primary" size="sm" onClick={assignToSelf} loading={acting}>
+                    שייך אליי
+                  </Button>
+                </div>
               )}
 
               {canWriteTeamResponse && !inquiry.team_response && (
@@ -465,9 +538,14 @@ export default function InquiryDetailPage() {
 
               {canWriteManagerResponse && !inquiry.manager_response && (
                 <div className="mt-4 space-y-3">
-                  {inquiry.team_response && (
+                  {inquiry.team_response ? (
                     <div className="muted rounded-md bg-neutral-50 p-2 text-xs dark:bg-neutral-900/40">
                       הצוות כתב התייחסות — קרא אותה לפני שכותב/ת את ההחלטה הסופית.
+                    </div>
+                  ) : (
+                    <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+                      הפנייה דלגה על תגובת הגורם המטפל כי שויכה למד״ר או למנהל בית הספר. ההתייחסות כאן
+                      תסגור את הפנייה ותישלח לפונה במייל.
                     </div>
                   )}
                   <div>
@@ -658,6 +736,7 @@ export default function InquiryDetailPage() {
         inquiryId={inquiry.inquiry_id}
         currentGroup={inquiry.assigned_group}
         capabilities={capabilities}
+        prefillSelf={routingPrefillSelf}
         onRouted={refresh}
       />
 

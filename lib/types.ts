@@ -111,8 +111,10 @@ export interface UserCapabilities {
   isAdmin: boolean;
   /** Platform role `naat_pniot_lakoach`. Routes inquiries. */
   isNavigator: boolean;
-  /** Manager: ADMIN_GROUP **or** has any MANAGER_ROLE_KEYS (default `madr`). */
+  /** Manager: ADMIN_GROUP **or** has any manager role (`madr`, `school_manager`, …). */
   isManager: boolean;
+  /** Beast role מד"ר / מנהל בית הספר — assigning the inquiry to this user skips the team response. */
+  skipsTeamResponse: boolean;
   /** Super team member: in KEVA_GROUP (default `keva`). */
   isKeva: boolean;
 

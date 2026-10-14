@@ -58,7 +58,7 @@ export function FullPipeline({ value }: { value: PipelineInput | PipelineResult 
   return (
     <ol className="stepper">
       {pipe.stages.map((s, i) => {
-        const reached = s.state === 'done' || s.state === 'current';
+        const reached = s.state === 'done' || s.state === 'current' || s.state === 'skipped';
         return (
           <li
             key={s.def.key}
@@ -68,10 +68,18 @@ export function FullPipeline({ value }: { value: PipelineInput | PipelineResult 
             data-line={reached ? 'filled' : 'empty'}
           >
             <span className="stepper-dot">
-              {s.state === 'done' ? <Check /> : <span className="text-sm font-bold tabular-nums">{i + 1}</span>}
+              {s.state === 'done' ? (
+                <Check />
+              ) : s.state === 'skipped' ? (
+                <span className="text-sm font-bold">–</span>
+              ) : (
+                <span className="text-sm font-bold tabular-nums">{i + 1}</span>
+              )}
             </span>
             <span className="stepper-label">{s.def.title}</span>
-            <span className="stepper-actor">{s.def.actor}</span>
+            <span className="stepper-actor">
+              {s.state === 'skipped' ? 'דולג — המטפל הוא מד״ר או מנהל בית הספר' : s.def.actor}
+            </span>
           </li>
         );
       })}

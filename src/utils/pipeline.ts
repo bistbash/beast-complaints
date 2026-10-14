@@ -10,7 +10,7 @@
  */
 
 export type StageKey = 'received' | 'routed' | 'team' | 'manager' | 'sent';
-export type StageState = 'done' | 'current' | 'upcoming';
+export type StageState = 'done' | 'current' | 'upcoming' | 'skipped';
 
 /** Each stage carries its own accent so the whole app stays colour-coded by phase. */
 export type StageColor = 'slate' | 'indigo' | 'violet' | 'amber' | 'emerald';
@@ -66,31 +66,42 @@ export interface PipelineResult {
  * (detail page) — e.g. a closed-but-unsent inquiry surfaces the email step as
  * still "current".
  */
+function hasField(input: PipelineInput, key: keyof PipelineInput): boolean {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
 export function computePipeline(input: PipelineInput): PipelineResult {
   const s = input.status;
-  const hasTimestamps = input.closing_email_sent_at !== undefined;
+  const hasTimestamps = hasField(input, 'closing_email_sent_at');
+  const pastTeam = s === 'awaiting_manager' || s === 'closed';
+  // List cards often know only the status. The detail page passes the response
+  // fields, so a manager-routed inquiry (no team text) can show the step as skipped.
+  const teamKnown = hasField(input, 'team_response') || hasField(input, 'team_response_at');
+  const teamAnswered = !!(input.team_response_at || input.team_response);
+  const teamSkipped = teamKnown && !teamAnswered && pastTeam;
 
   const done: boolean[] = [
     // received — always true once the row exists.
     true,
     // routed
     !!input.routed_at || !!input.assigned_group || ['routed', 'awaiting_manager', 'closed'].includes(s),
-    // team responded
-    !!input.team_response_at || !!input.team_response || ['awaiting_manager', 'closed'].includes(s),
+    // team responded — skipped steps are not "done"
+    teamSkipped ? false : teamKnown ? teamAnswered : pastTeam,
     // manager responded
     !!input.manager_response_at || !!input.manager_response || s === 'closed',
     // sent to customer — when we know the email timestamp, trust it; otherwise
     // treat "closed" as sent (the closing action sends the mail).
     hasTimestamps ? !!input.closing_email_sent_at : s === 'closed',
   ];
+  const skipped = [false, false, teamSkipped, false, false];
 
-  let currentIndex = done.findIndex((d) => !d);
+  let currentIndex = done.findIndex((d, i) => !d && !skipped[i]);
   const isComplete = currentIndex === -1;
   if (isComplete) currentIndex = PIPELINE_STAGES.length - 1;
 
   const stages: PipelineStage[] = PIPELINE_STAGES.map((def, i) => ({
     def,
-    state: done[i] ? 'done' : i === currentIndex ? 'current' : 'upcoming',
+    state: skipped[i] ? 'skipped' : done[i] ? 'done' : i === currentIndex ? 'current' : 'upcoming',
   }));
 
   return {

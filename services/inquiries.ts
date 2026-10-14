@@ -344,7 +344,7 @@ export async function routeInquiry(
     input.routedBy,
     null,
     input.routeToManager
-      ? `הפנייה נותבה ישירות למנהל (קבוצה: ${groupLabelHe(input.group)}${input.assignedUser ? `, מטפל: ${input.assignedUserLabel || humanizeIdentifier(input.assignedUser)}` : ''}).`
+      ? `הפנייה שויכה ל-${input.assignedUserLabel || humanizeIdentifier(input.assignedUser || '')} (מד"ר / מנהל בית ספר) ועוברת להתייחסות סופית, בלי תגובת גורם מטפל.`
       : input.assignedUser
         ? `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}" ושויכה ל-${input.assignedUserLabel || humanizeIdentifier(input.assignedUser)}.`
         : `הפנייה נותבה לקבוצה "${groupLabelHe(input.group)}".`,
@@ -610,97 +610,356 @@ function dedupedTableSql(table: string, whereSql = ''): string {
   ) inquiries`;
 }
 
-export async function getStats(meta: DatasetMeta) {
+/** Named time-range for the stats dashboard. `all` disables the created_at filter entirely. */
+export type StatsRange = 'all' | '7d' | '30d' | '90d';
+const RANGE_DAYS: Record<Exclude<StatsRange, 'all'>, number> = { '7d': 7, '30d': 30, '90d': 90 };
+
+interface HeadlineCounts {
+  total: number;
+  closed: number;
+  avgResolutionHours: number | null;
+  slaMet: number; // closed inquiries whose closed_at was on/before due_at
+  slaBreachedClosed: number; // closed inquiries whose closed_at was after due_at
+}
+
+/**
+ * Aggregate counts for a single window (either the current range or the
+ * previous, same-length window used for deltas). Everything else on the
+ * dashboard reuses these numbers, so it's centralized here.
+ */
+async function fetchHeadline(dedupedTable: string, whereRange: string, params: unknown[]): Promise<HeadlineCounts> {
+  const q = `
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'closed')::int AS closed,
+      AVG(EXTRACT(EPOCH FROM (closed_at - created_at))/3600)
+        FILTER (WHERE closed_at IS NOT NULL)::float AS avg_hours,
+      COUNT(*) FILTER (
+        WHERE status = 'closed' AND closed_at IS NOT NULL
+          AND (due_at IS NULL OR closed_at <= due_at)
+      )::int AS sla_met,
+      COUNT(*) FILTER (
+        WHERE status = 'closed' AND closed_at IS NOT NULL
+          AND due_at IS NOT NULL AND closed_at > due_at
+      )::int AS sla_breached_closed
+    FROM ${dedupedTable}
+    ${whereRange}
+  `;
+  const r = await pool.query<{
+    total: number;
+    closed: number;
+    avg_hours: number | null;
+    sla_met: number;
+    sla_breached_closed: number;
+  }>(q, params);
+  const row = r.rows[0];
+  return {
+    total: row?.total ?? 0,
+    closed: row?.closed ?? 0,
+    avgResolutionHours: row?.avg_hours ?? null,
+    slaMet: row?.sla_met ?? 0,
+    slaBreachedClosed: row?.sla_breached_closed ?? 0,
+  };
+}
+
+export async function getStats(meta: DatasetMeta, range: StatsRange = 'all') {
   const table = quoteIdent(meta.tableName);
   const deduped = dedupedTableSql(table);
-  const [byStatus, byPriority, byGroup, byCategory, slaBreaches, avgResolution, timings, createdTrend, closedTrend] =
-    await Promise.all([
-      pool.query<{ status: string; count: number }>(
-        `SELECT status, COUNT(*)::int AS count FROM ${deduped} GROUP BY status`,
-      ),
-      pool.query<{ priority: string; count: number }>(
-        `SELECT priority, COUNT(*)::int AS count FROM ${deduped} GROUP BY priority`,
-      ),
-      pool.query<{ assigned_group: string | null; count: number }>(
-        `SELECT assigned_group, COUNT(*)::int AS count FROM ${deduped} GROUP BY assigned_group`,
-      ),
-      pool.query<{ category: string | null; count: number }>(
-        `SELECT request_category AS category, COUNT(*)::int AS count FROM ${deduped} GROUP BY request_category`,
-      ),
-      pool.query<{ count: number }>(
-        `SELECT COUNT(*)::int AS count FROM ${deduped}
-          WHERE due_at IS NOT NULL AND due_at < NOW()
-            AND status NOT IN ('closed')`,
-      ),
-      pool.query<{ avg_hours: number | null }>(
-        `SELECT AVG(EXTRACT(EPOCH FROM (closed_at - created_at))/3600)::float AS avg_hours
-           FROM ${deduped} WHERE closed_at IS NOT NULL`,
-      ),
-      // Average time spent in each pipeline stage + median end-to-end resolution.
-      pool.query<{
-        avg_route_hours: number | null;
-        avg_team_hours: number | null;
-        avg_manager_hours: number | null;
-        median_resolution_hours: number | null;
-      }>(
-        `SELECT
-            AVG(EXTRACT(EPOCH FROM (routed_at - created_at))/3600)
-              FILTER (WHERE routed_at IS NOT NULL AND routed_at >= created_at)::float AS avg_route_hours,
-            AVG(EXTRACT(EPOCH FROM (team_response_at - routed_at))/3600)
-              FILTER (WHERE team_response_at IS NOT NULL AND routed_at IS NOT NULL AND team_response_at >= routed_at)::float AS avg_team_hours,
-            AVG(EXTRACT(EPOCH FROM (manager_response_at - team_response_at))/3600)
-              FILTER (WHERE manager_response_at IS NOT NULL AND team_response_at IS NOT NULL AND manager_response_at >= team_response_at)::float AS avg_manager_hours,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (
-              ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at))/3600
-            ) AS median_resolution_hours
-          FROM ${deduped}`,
-      ),
-      // Weekly created/closed counts over the last 12 ISO weeks (oldest → newest).
-      pool.query<{ week: string; count: number }>(
-        `SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS week, COUNT(*)::int AS count
-           FROM ${deduped}
-          WHERE created_at >= date_trunc('week', NOW()) - INTERVAL '11 weeks'
-          GROUP BY 1 ORDER BY 1`,
-      ),
-      pool.query<{ week: string; count: number }>(
-        `SELECT to_char(date_trunc('week', closed_at), 'YYYY-MM-DD') AS week, COUNT(*)::int AS count
-           FROM ${deduped}
-          WHERE closed_at IS NOT NULL AND closed_at >= date_trunc('week', NOW()) - INTERVAL '11 weeks'
-          GROUP BY 1 ORDER BY 1`,
-      ),
-    ]);
 
-  // Build a contiguous 12-week skeleton so the trend chart never has gaps.
-  const createdByWeek = new Map(createdTrend.rows.map((r) => [r.week, r.count]));
-  const closedByWeek = new Map(closedTrend.rows.map((r) => [r.week, r.count]));
-  const trend: Array<{ week: string; created: number; closed: number }> = [];
-  const monday = new Date();
-  monday.setUTCHours(0, 0, 0, 0);
-  // Move to the Monday of the current ISO week.
-  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(monday);
-    d.setUTCDate(monday.getUTCDate() - i * 7);
-    const key = d.toISOString().slice(0, 10);
-    trend.push({ week: key, created: createdByWeek.get(key) ?? 0, closed: closedByWeek.get(key) ?? 0 });
+  // Build range clauses. `whereRange` filters by `created_at` (the semantic
+  // "the inquiry belongs to this period") — everything else derives from that.
+  let whereRange = '';
+  let whereRangePrev = '';
+  const rangeParams: unknown[] = [];
+  const prevParams: unknown[] = [];
+  let periodStartIso: string | null = null;
+  let periodEndIso: string | null = null;
+  if (range !== 'all') {
+    const days = RANGE_DAYS[range];
+    const now = new Date();
+    const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const prevStart = new Date(start.getTime() - days * 24 * 60 * 60 * 1000);
+    whereRange = `WHERE created_at >= $1 AND created_at <= $2`;
+    whereRangePrev = `WHERE created_at >= $1 AND created_at < $2`;
+    rangeParams.push(start.toISOString(), now.toISOString());
+    prevParams.push(prevStart.toISOString(), start.toISOString());
+    periodStartIso = start.toISOString();
+    periodEndIso = now.toISOString();
   }
 
-  const t = timings.rows[0];
+  const trendPlan = planTrend(range);
+
+  const [
+    headline,
+    previous,
+    byStatus,
+    byPriority,
+    byGroup,
+    byCategory,
+    byJustification,
+    slaBreachesOpen,
+    reopened,
+    stageTimings,
+    backlogAge,
+    topReporters,
+    createdTrend,
+    closedTrend,
+  ] = await Promise.all([
+    fetchHeadline(deduped, whereRange, rangeParams),
+    range === 'all' ? Promise.resolve<HeadlineCounts | null>(null) : fetchHeadline(deduped, whereRangePrev, prevParams),
+    pool.query<{ status: string; count: number }>(
+      `SELECT status, COUNT(*)::int AS count FROM ${deduped} ${whereRange} GROUP BY status`,
+      rangeParams,
+    ),
+    pool.query<{ priority: string; count: number }>(
+      `SELECT priority, COUNT(*)::int AS count FROM ${deduped} ${whereRange} GROUP BY priority`,
+      rangeParams,
+    ),
+    pool.query<{ assigned_group: string | null; count: number }>(
+      `SELECT assigned_group, COUNT(*)::int AS count FROM ${deduped} ${whereRange} GROUP BY assigned_group`,
+      rangeParams,
+    ),
+    pool.query<{ category: string | null; count: number }>(
+      `SELECT request_category AS category, COUNT(*)::int AS count FROM ${deduped} ${whereRange} GROUP BY request_category`,
+      rangeParams,
+    ),
+    pool.query<{ justification: string | null; count: number }>(
+      `SELECT justification, COUNT(*)::int AS count FROM ${deduped}
+        ${whereRange ? `${whereRange} AND` : 'WHERE'} status = 'closed'
+        GROUP BY justification`,
+      rangeParams,
+    ),
+    // Currently-open + past-due. Semantically a "now" metric — but we still scope
+    // it to the range (inquiries created in the window) so it aligns with the header KPIs.
+    pool.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM ${deduped}
+        ${whereRange ? `${whereRange} AND` : 'WHERE'}
+          due_at IS NOT NULL AND due_at < NOW() AND status <> 'closed'`,
+      rangeParams,
+    ),
+    // Reopened count from the audit log — an inquiry can be reopened multiple times;
+    // we count *events* (one per reopen). Scope by history.created_at when a range is set.
+    pool.query<{ count: number }>(
+      range === 'all'
+        ? `SELECT COUNT(*)::int AS count FROM complaints_history WHERE action = 'reopened'`
+        : `SELECT COUNT(*)::int AS count FROM complaints_history
+            WHERE action = 'reopened' AND created_at >= $1 AND created_at <= $2`,
+      rangeParams,
+    ),
+    pool.query<{
+      avg_route_hours: number | null;
+      med_route_hours: number | null;
+      avg_team_hours: number | null;
+      med_team_hours: number | null;
+      avg_manager_hours: number | null;
+      med_manager_hours: number | null;
+      median_resolution_hours: number | null;
+      p90_resolution_hours: number | null;
+      closing_email_sent: number;
+    }>(
+      `SELECT
+          AVG(EXTRACT(EPOCH FROM (routed_at - created_at))/3600)
+            FILTER (WHERE routed_at IS NOT NULL AND routed_at >= created_at)::float AS avg_route_hours,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (routed_at - created_at))/3600
+          ) FILTER (WHERE routed_at IS NOT NULL AND routed_at >= created_at) AS med_route_hours,
+          AVG(EXTRACT(EPOCH FROM (team_response_at - routed_at))/3600)
+            FILTER (WHERE team_response_at IS NOT NULL AND routed_at IS NOT NULL AND team_response_at >= routed_at)::float AS avg_team_hours,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (team_response_at - routed_at))/3600
+          ) FILTER (WHERE team_response_at IS NOT NULL AND routed_at IS NOT NULL AND team_response_at >= routed_at) AS med_team_hours,
+          AVG(EXTRACT(EPOCH FROM (manager_response_at - team_response_at))/3600)
+            FILTER (WHERE manager_response_at IS NOT NULL AND team_response_at IS NOT NULL AND manager_response_at >= team_response_at)::float AS avg_manager_hours,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (manager_response_at - team_response_at))/3600
+          ) FILTER (WHERE manager_response_at IS NOT NULL AND team_response_at IS NOT NULL AND manager_response_at >= team_response_at) AS med_manager_hours,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at))/3600
+          ) FILTER (WHERE closed_at IS NOT NULL) AS median_resolution_hours,
+          PERCENTILE_CONT(0.9) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (closed_at - created_at))/3600
+          ) FILTER (WHERE closed_at IS NOT NULL) AS p90_resolution_hours,
+          COUNT(*) FILTER (WHERE closing_email_sent_at IS NOT NULL)::int AS closing_email_sent
+        FROM ${deduped}
+        ${whereRange}`,
+      rangeParams,
+    ),
+    // Age buckets for currently-open inquiries. Always computed "as of NOW",
+    // constrained to the range window when one is selected.
+    pool.query<{
+      bucket_0_1: number;
+      bucket_1_3: number;
+      bucket_3_7: number;
+      bucket_7_14: number;
+      bucket_14_plus: number;
+    }>(
+      `SELECT
+          COUNT(*) FILTER (WHERE age_days < 1)::int AS bucket_0_1,
+          COUNT(*) FILTER (WHERE age_days >= 1 AND age_days < 3)::int AS bucket_1_3,
+          COUNT(*) FILTER (WHERE age_days >= 3 AND age_days < 7)::int AS bucket_3_7,
+          COUNT(*) FILTER (WHERE age_days >= 7 AND age_days < 14)::int AS bucket_7_14,
+          COUNT(*) FILTER (WHERE age_days >= 14)::int AS bucket_14_plus
+        FROM (
+          SELECT EXTRACT(EPOCH FROM (NOW() - created_at))/86400 AS age_days
+            FROM ${deduped}
+            ${whereRange ? `${whereRange} AND` : 'WHERE'} status <> 'closed'
+        ) ages`,
+      rangeParams,
+    ),
+    // Top reporters (by total inquiries in the range). Grouped case-insensitively
+    // on email; `full_name` is picked from an arbitrary sample row for display.
+    pool.query<{ email: string; full_name: string | null; total: number; open: number }>(
+      `SELECT
+          LOWER(TRIM(email)) AS email,
+          MAX(NULLIF(TRIM(full_name), '')) AS full_name,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status <> 'closed')::int AS open
+        FROM ${deduped}
+        ${whereRange ? `${whereRange} AND` : 'WHERE'} email IS NOT NULL AND TRIM(email) <> ''
+        GROUP BY LOWER(TRIM(email))
+        ORDER BY total DESC, open DESC
+        LIMIT 5`,
+      rangeParams,
+    ),
+    // Trend queries — bucketed by the granularity chosen for the current range.
+    pool.query<{ bucket: string; count: number }>(
+      `SELECT to_char(date_trunc('${trendPlan.pgUnit}', created_at), 'YYYY-MM-DD') AS bucket,
+              COUNT(*)::int AS count
+         FROM ${deduped}
+        WHERE created_at >= $1
+        GROUP BY 1 ORDER BY 1`,
+      [trendPlan.since.toISOString()],
+    ),
+    pool.query<{ bucket: string; count: number }>(
+      `SELECT to_char(date_trunc('${trendPlan.pgUnit}', closed_at), 'YYYY-MM-DD') AS bucket,
+              COUNT(*)::int AS count
+         FROM ${deduped}
+        WHERE closed_at IS NOT NULL AND closed_at >= $1
+        GROUP BY 1 ORDER BY 1`,
+      [trendPlan.since.toISOString()],
+    ),
+  ]);
+
+  // Fill missing buckets so the trend chart draws a continuous line.
+  const createdByBucket = new Map(createdTrend.rows.map((r) => [r.bucket, r.count]));
+  const closedByBucket = new Map(closedTrend.rows.map((r) => [r.bucket, r.count]));
+  const trend = trendPlan.buckets.map((key) => ({
+    bucket: key,
+    created: createdByBucket.get(key) ?? 0,
+    closed: closedByBucket.get(key) ?? 0,
+  }));
+
+  const t = stageTimings.rows[0];
+  const justificationCounts = new Map(byJustification.rows.map((r) => [r.justification, r.count]));
+  const closedTotal = headline.closed;
+  const closingEmailSent = t?.closing_email_sent ?? 0;
+  const slaCompliancePct =
+    closedTotal > 0
+      ? Math.round(((headline.slaMet) / closedTotal) * 100)
+      : null;
+
+  const bucket = backlogAge.rows[0];
+
   return {
+    range,
+    periodStart: periodStartIso,
+    periodEnd: periodEndIso,
+    trendGranularity: trendPlan.granularity,
+    headline: {
+      total: headline.total,
+      closed: headline.closed,
+      open: headline.total - headline.closed,
+      avgResolutionHours: headline.avgResolutionHours,
+      closingEmailSent,
+      closingEmailSentPct: closedTotal > 0 ? Math.round((closingEmailSent / closedTotal) * 100) : null,
+      slaMet: headline.slaMet,
+      slaBreachedClosed: headline.slaBreachedClosed,
+      slaCompliancePct,
+      slaBreachesOpen: slaBreachesOpen.rows[0]?.count ?? 0,
+      reopenedCount: reopened.rows[0]?.count ?? 0,
+      justifiedCount: justificationCounts.get('justified') ?? 0,
+      unjustifiedCount: justificationCounts.get('unjustified') ?? 0,
+      pendingJustificationCount: justificationCounts.get(null) ?? 0,
+    },
+    previous: previous
+      ? {
+          total: previous.total,
+          closed: previous.closed,
+          avgResolutionHours: previous.avgResolutionHours,
+          slaMet: previous.slaMet,
+          slaCompliancePct:
+            previous.closed > 0 ? Math.round((previous.slaMet / previous.closed) * 100) : null,
+        }
+      : null,
     byStatus: byStatus.rows,
     byPriority: byPriority.rows,
     byGroup: byGroup.rows,
     byCategory: byCategory.rows,
-    slaBreaches: slaBreaches.rows[0]?.count ?? 0,
-    avgResolutionHours: avgResolution.rows[0]?.avg_hours ?? null,
+    backlogAge: {
+      lt1d: bucket?.bucket_0_1 ?? 0,
+      d1to3: bucket?.bucket_1_3 ?? 0,
+      d3to7: bucket?.bucket_3_7 ?? 0,
+      d7to14: bucket?.bucket_7_14 ?? 0,
+      d14plus: bucket?.bucket_14_plus ?? 0,
+    },
+    topReporters: topReporters.rows,
     timings: {
       avgRouteHours: t?.avg_route_hours ?? null,
+      medRouteHours: t?.med_route_hours ?? null,
       avgTeamHours: t?.avg_team_hours ?? null,
+      medTeamHours: t?.med_team_hours ?? null,
       avgManagerHours: t?.avg_manager_hours ?? null,
+      medManagerHours: t?.med_manager_hours ?? null,
       medianResolutionHours: t?.median_resolution_hours ?? null,
+      p90ResolutionHours: t?.p90_resolution_hours ?? null,
     },
-    trend,
+    // Kept as `trend` for backwards-compat, with an extra `bucket` field alongside `week`.
+    trend: trend.map((t) => ({ week: t.bucket, bucket: t.bucket, created: t.created, closed: t.closed })),
   };
+}
+
+interface TrendPlan {
+  granularity: 'day' | 'week';
+  pgUnit: 'day' | 'week';
+  since: Date;
+  buckets: string[]; // sorted oldest → newest, ISO date "YYYY-MM-DD"
+}
+
+/**
+ * Pick a sensible bucket size for the trend chart based on the selected range.
+ *   7d  → 7 daily buckets
+ *   30d → 30 daily buckets
+ *   90d → ~13 weekly buckets
+ *   all → 12 weekly buckets (backwards-compatible)
+ */
+function planTrend(range: StatsRange): TrendPlan {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (range === '7d' || range === '30d') {
+    const days = range === '7d' ? 7 : 30;
+    const buckets: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setUTCDate(today.getUTCDate() - i);
+      buckets.push(d.toISOString().slice(0, 10));
+    }
+    const since = new Date(today);
+    since.setUTCDate(today.getUTCDate() - (days - 1));
+    return { granularity: 'day', pgUnit: 'day', since, buckets };
+  }
+  // 90d / all → weekly buckets. 90d → 13 weeks, all → 12 weeks.
+  const weeks = range === '90d' ? 13 : 12;
+  const monday = new Date(today);
+  monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7));
+  const buckets: string[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const d = new Date(monday);
+    d.setUTCDate(monday.getUTCDate() - i * 7);
+    buckets.push(d.toISOString().slice(0, 10));
+  }
+  const since = new Date(monday);
+  since.setUTCDate(monday.getUTCDate() - (weeks - 1) * 7);
+  return { granularity: 'week', pgUnit: 'week', since, buckets };
 }
 
 export type { InquiryRow };

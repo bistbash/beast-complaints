@@ -12,7 +12,9 @@
  *                          closed → [closing email sent to submitter]
  *
  *   Alternative path:
- *   [parent] → new → (navigator routes directly to manager) → awaiting_manager → closed
+ *   Routing to a user whose Beast role is מד"ר (`madr`) or מנהל בית הספר
+ *   (`school_manager`) skips the team response and lands on awaiting_manager.
+ *   That person's manager response closes the inquiry and is emailed to the submitter.
  */
 
 export const STATUS = {
@@ -50,11 +52,16 @@ export const PRIORITY_LABEL_HE: Record<InquiryPriority, string> = {
   urgent: 'דחופה',
 };
 
+/**
+ * Uniform 1-week SLA across all priorities. Kept as a per-priority map so the
+ * shape stays open to reintroducing tighter deadlines for urgent/high later
+ * without touching every call site.
+ */
 export const PRIORITY_SLA_HOURS: Record<InquiryPriority, number> = {
   low: 168,
-  medium: 72,
-  high: 24,
-  urgent: 4,
+  medium: 168,
+  high: 168,
+  urgent: 168,
 };
 
 export const CATEGORIES = [
@@ -120,11 +127,31 @@ export const HISTORY_ACTION = {
 export type HistoryAction = (typeof HISTORY_ACTION)[keyof typeof HISTORY_ACTION];
 
 /**
- * Role keys that map to "manager" capability in addition to the admin AD group.
- * Configurable via MANAGER_ROLE_KEYS env (comma-separated). The default `madr`
- * corresponds to the מד"ר platform role in Beast.
+ * Beast role keys that both grant manager capability and, when an inquiry is
+ * assigned to such a user, skip the handling-party response.
+ * `madr` = מד"ר, `school_manager` = מנהל בית הספר.
+ * MANAGER_ROLE_KEYS may add more keys; these two are always included.
  */
-export const DEFAULT_MANAGER_ROLE_KEYS = ['madr'];
+export const DEFAULT_MANAGER_ROLE_KEYS = ['madr', 'school_manager'];
+
+export function managerRoleKeys(): string[] {
+  const fromEnv = (process.env.MANAGER_ROLE_KEYS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set([...DEFAULT_MANAGER_ROLE_KEYS, ...fromEnv]));
+}
+
+export function hasManagerRole(
+  roles: Array<string | { key?: string | null } | null | undefined> | null | undefined,
+): boolean {
+  const wanted = new Set(managerRoleKeys());
+  return (roles || []).some((role) => {
+    if (!role) return false;
+    const key = typeof role === 'string' ? role : role.key || '';
+    return wanted.has(key.trim().toLowerCase());
+  });
+}
 
 /** Group that grants "super team member" — sees all teams, but routes only within own teams. */
 export const DEFAULT_KEVA_GROUP = 'keva';

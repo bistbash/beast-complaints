@@ -29,6 +29,13 @@ export interface InquirySummary {
   created_at: string;
   assigned_group: string | null;
   assigned_user: string | null;
+  routed_at?: string | null;
+  team_response?: string | null;
+  team_response_at?: string | null;
+  manager_response?: string | null;
+  manager_response_at?: string | null;
+  closing_email_sent_at?: string | null;
+  closed_at?: string | null;
   last_activity_at: string;
   due_at: string | null;
   justification?: JustificationDecision | null;
@@ -44,7 +51,17 @@ export default function InquiryCard({ inquiry, displayNames = {} }: InquiryCardP
   const urgencyClass =
     urgency === 'critical' ? 'urgency-critical' : urgency === 'warning' ? 'urgency-warning' : '';
 
-  const pipe = computePipeline({ status: inquiry.status, assigned_group: inquiry.assigned_group });
+  const pipe = computePipeline({
+    status: inquiry.status,
+    assigned_group: inquiry.assigned_group,
+    ...('routed_at' in inquiry ? { routed_at: inquiry.routed_at } : {}),
+    ...('team_response' in inquiry ? { team_response: inquiry.team_response } : {}),
+    ...('team_response_at' in inquiry ? { team_response_at: inquiry.team_response_at } : {}),
+    ...('manager_response' in inquiry ? { manager_response: inquiry.manager_response } : {}),
+    ...('manager_response_at' in inquiry ? { manager_response_at: inquiry.manager_response_at } : {}),
+    ...('closing_email_sent_at' in inquiry ? { closing_email_sent_at: inquiry.closing_email_sent_at } : {}),
+    ...('closed_at' in inquiry ? { closed_at: inquiry.closed_at } : {}),
+  });
 
   const assigneeName = inquiry.assigned_user
     ? displayNames[inquiry.assigned_user.toLowerCase()] || inquiry.assigned_user

@@ -137,7 +137,7 @@ export default function UserSearchInput({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
                   {user.displayName}
-                  {user.isManager ? ' (מנהל)' : ''}
+                  {user.isManager ? ' (מד״ר / מנהל)' : ''}
                 </p>
                 <p className="muted truncate font-mono text-xs">{user.username}</p>
               </div>

@@ -38,7 +38,8 @@ import {
   HISTORY_ACTION,
   MESSAGE_TYPE,
   JUSTIFICATION,
-  DEFAULT_MANAGER_ROLE_KEYS,
+  hasManagerRole,
+  managerRoleKeys,
   type InquiryStatus,
   type InquiryPriority,
   type JustificationDecision,
@@ -56,6 +57,16 @@ import { quoteIdent } from '../lib/quoteIdent.ts';
 
 const router: Router = Router();
 router.use(authenticateBeastUser);
+
+function isCurrentUser(
+  identifier: string,
+  user: { username?: string },
+  email: string,
+): boolean {
+  const id = identifier.trim().toLowerCase();
+  const username = (user.username || '').trim().toLowerCase();
+  return id === email.trim().toLowerCase() || (!!username && (id === username || id === `${username}@local`));
+}
 
 function datasetId() {
   return process.env.COMPLAINTS_DATASET_ID || '';
@@ -127,10 +138,6 @@ router.get('/lookup/members', async (req, res, next) => {
       return;
     }
 
-    const managerRoles = (process.env.MANAGER_ROLE_KEYS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-    const wantedManagerRoles = managerRoles.length ? managerRoles : DEFAULT_MANAGER_ROLE_KEYS.map((s) => s.toLowerCase());
-    const adminGroup = (process.env.ADMIN_GROUP || 'tichnun').toLowerCase();
-
     if (group) {
       const members = await listGroupMembers(group);
       const enriched = await enrichMembersWithAvatars(members, req.beastToken);
@@ -141,9 +148,7 @@ router.get('/lookup/members', async (req, res, next) => {
           displayName: m.displayName || m.username,
           avatarUrl: m.avatarUrl,
           suggestedGroup: group,
-          isManager:
-            m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
-            (m.roles || []).some((r) => wantedManagerRoles.includes(r.toLowerCase())),
+          isManager: hasManagerRole(m.roles),
         })),
       });
       return;
@@ -172,7 +177,6 @@ router.get('/lookup/members', async (req, res, next) => {
         members: await listGroupMembers(g),
       })),
     );
-
     for (const entry of grouped) {
       for (const m of entry.members) {
         const key = (m.email || m.username || '').toLowerCase();
@@ -183,9 +187,7 @@ router.get('/lookup/members', async (req, res, next) => {
             email: m.email,
             displayName: m.displayName || m.username,
             suggestedGroup: entry.group,
-            isManager:
-              m.groups.map((g) => g.toLowerCase()).includes(adminGroup) ||
-              (m.roles || []).some((r) => wantedManagerRoles.includes(r.toLowerCase())),
+            isManager: hasManagerRole(m.roles),
           });
         }
       }
@@ -208,12 +210,33 @@ router.get('/lookup/members', async (req, res, next) => {
   }
 });
 
+router.get('/lookup/assignee-role', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const identifier = String(req.query.user || '').trim();
+    if (!identifier) {
+      res.json({ skipsTeamResponse: false });
+      return;
+    }
+    const caps = buildCapabilities(req.user);
+    if (isCurrentUser(identifier, req.user, caps.email)) {
+      res.json({ skipsTeamResponse: hasManagerRole(req.user.roles) });
+      return;
+    }
+    const assignee = await findUser(identifier);
+    res.json({ skipsTeamResponse: assignee ? hasManagerRole(assignee.roles) : false });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/lookup/managers', async (req, res, next) => {
   try {
     const adminGroup = process.env.ADMIN_GROUP || 'tichnun';
-    const roleKeys = (process.env.MANAGER_ROLE_KEYS || '').trim()
-      ? (process.env.MANAGER_ROLE_KEYS as string).split(',').map((s) => s.trim())
-      : DEFAULT_MANAGER_ROLE_KEYS;
+    const roleKeys = managerRoleKeys();
     const managers = await listManagers({ adminGroup, roleKeys });
     const enriched = await enrichMembersWithAvatars(managers, req.beastToken);
     res.json({
@@ -284,10 +307,14 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-router.get('/stats', async (_req, res, next) => {
+router.get('/stats', async (req, res, next) => {
   try {
     const meta = await requireDataset();
-    const stats = await getStats(meta);
+    const rawRange = typeof req.query.range === 'string' ? req.query.range : 'all';
+    const range = (['all', '7d', '30d', '90d'] as const).includes(rawRange as never)
+      ? (rawRange as 'all' | '7d' | '30d' | '90d')
+      : 'all';
+    const stats = await getStats(meta, range);
     res.json(stats);
   } catch (err) {
     next(err);
@@ -347,7 +374,7 @@ router.post('/:id/route', async (req, res, next) => {
       return;
     }
     const meta = await requireDataset();
-    const { group, assignedUser, routeToManager } = req.body || {};
+    const { group, assignedUser } = req.body || {};
 
     // Keva users can only route to groups they're members of.
     // Resolve "user-only" routing: if assignedUser is provided without group,
@@ -355,28 +382,32 @@ router.post('/:id/route', async (req, res, next) => {
     let finalGroup: string = group;
     let finalAssignedUser: string | null = assignedUser || null;
     let finalAssignedUserLabel: string | null = null;
-    let finalRouteToManager: boolean = !!routeToManager;
+    let resolvedAssignee: Awaited<ReturnType<typeof findUser>> = null;
+
+    if (finalAssignedUser) {
+      resolvedAssignee = await findUser(finalAssignedUser);
+      finalAssignedUserLabel = resolvedAssignee?.displayName || humanizeIdentifier(finalAssignedUser);
+    }
 
     if (finalAssignedUser && !finalGroup) {
-      const u = await findUser(finalAssignedUser);
-      if (!u) {
+      if (!resolvedAssignee) {
         res.status(400).json({ error: 'משתמש לא נמצא ב-AD' });
         return;
       }
-      const candidates = u.groups.map((g) => g.toLowerCase() === 'teachers' ? 'morim' : g.toLowerCase());
-      const allowed = caps.manageableGroups.map((g) => g.toLowerCase());
-      const hasNonTeacherGroup = candidates.some((g) => g !== 'morim' && allowed.includes(g));
-      const virtualTeacherCandidate = !hasNonTeacherGroup && allowed.includes('morim') ? 'morim' : null;
-      const match = candidates.find((g) => allowed.includes(g)) || virtualTeacherCandidate;
+      const candidates = resolvedAssignee.groups.map((g) => (g.toLowerCase() === 'teachers' ? 'morim' : g));
+      const allowed = caps.manageableGroups;
+      const hasNonTeacherGroup = candidates.some(
+        (g) => !groupsMatch(g, 'morim') && allowed.some((a) => groupsMatch(a, g)),
+      );
+      const virtualTeacherCandidate =
+        !hasNonTeacherGroup && allowed.some((a) => groupsMatch(a, 'morim')) ? 'morim' : null;
+      const match =
+        allowed.find((a) => candidates.some((g) => groupsMatch(a, g))) || virtualTeacherCandidate;
       if (!match) {
         res.status(403).json({ error: 'המשתמש שבחרת אינו חבר בקבוצה שאתה מורשה לנתב אליה' });
         return;
       }
       finalGroup = match;
-      finalAssignedUserLabel = u.displayName || humanizeIdentifier(finalAssignedUser);
-    } else if (finalAssignedUser) {
-      const u = await findUser(finalAssignedUser);
-      finalAssignedUserLabel = u?.displayName || humanizeIdentifier(finalAssignedUser);
     }
 
     if (!finalGroup) {
@@ -385,8 +416,8 @@ router.post('/:id/route', async (req, res, next) => {
     }
 
     // Permission check on the target group.
-    const allowed = caps.manageableGroups.map((g) => g.toLowerCase());
-    if (!allowed.includes(finalGroup.toLowerCase())) {
+    const allowed = caps.manageableGroups;
+    if (!allowed.some((g) => groupsMatch(g, finalGroup))) {
       res.status(403).json({
         error: caps.isKeva
           ? 'כחבר קבע אתה יכול לנתב רק לקבוצות שאתה חבר בהן'
@@ -395,19 +426,15 @@ router.post('/:id/route', async (req, res, next) => {
       return;
     }
 
-    // If routing to a user who is a manager, automatically set routeToManager=true.
-    if (finalAssignedUser && !finalRouteToManager) {
-      const u = await findUser(finalAssignedUser);
-      if (u) {
-        const adminGroup = (process.env.ADMIN_GROUP || 'tichnun').toLowerCase();
-        const userIsAdmin = u.groups.map((g) => g.toLowerCase()).includes(adminGroup);
-        const managerRoles = (process.env.MANAGER_ROLE_KEYS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
-        const wantedRoles = managerRoles.length ? managerRoles : DEFAULT_MANAGER_ROLE_KEYS;
-        const userIsManagerByRole = (u.roles || []).some((r) => wantedRoles.includes(r.toLowerCase()));
-        if (userIsAdmin || userIsManagerByRole) {
-          finalRouteToManager = true;
-        }
-      }
+    // Skip the handling-party stage only when the assignee's Beast role is
+    // מד"ר or מנהל בית הספר (or another configured manager role). Membership in
+    // the admin group alone does not skip it, and the client cannot force it.
+    let finalRouteToManager = false;
+    if (finalAssignedUser) {
+      const directoryHit = resolvedAssignee ? hasManagerRole(resolvedAssignee.roles) : false;
+      const callerHit =
+        isCurrentUser(finalAssignedUser, req.user, caps.email) && hasManagerRole(req.user.roles);
+      finalRouteToManager = directoryHit || callerHit;
     }
 
     const updated = await routeInquiry(meta, req.params.id, {
@@ -424,14 +451,16 @@ router.post('/:id/route', async (req, res, next) => {
 
     // Notifications:
     // 1) Notify the assigned user (if any).
-    if (finalAssignedUser) {
+    const assigningToSelf =
+      !!finalAssignedUser && isCurrentUser(finalAssignedUser, req.user, caps.email);
+    if (finalAssignedUser && !assigningToSelf) {
       void sendNotification(req.params.id, finalAssignedUser, {
         title: finalRouteToManager ? 'פנייה ממתינה להתייחסות מנהל' : 'פנייה חדשה שויכה אליך',
         message: updated.subject,
         link: `/inquiries/${req.params.id}`,
         type: 'info',
       });
-    } else {
+    } else if (!finalAssignedUser) {
       // 2) Otherwise notify the entire group.
       void notifyGroup(req.params.id, finalGroup, {
         title: 'פנייה נותבה לקבוצה שלך',
@@ -439,6 +468,75 @@ router.post('/:id/route', async (req, res, next) => {
         link: `/inquiries/${req.params.id}`,
         type: 'info',
       });
+    }
+    res.json({ inquiry: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Claim an open inquiry for the current user. Group members can take an unassigned row; routers can also take one already assigned. */
+router.post('/:id/assign-self', async (req, res, next) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const caps = buildCapabilities(req.user);
+    const meta = await requireDataset();
+    const inquiry = await getInquiry(meta, req.params.id);
+    if (!inquiry) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
+    }
+    if (inquiry.status === STATUS.CLOSED || inquiry.status === STATUS.AWAITING_MANAGER) {
+      res.status(409).json({ error: 'לא ניתן לשייך פנייה שכבר עברה את שלב הגורם המטפל' });
+      return;
+    }
+
+    const me = caps.email;
+    const skips = hasManagerRole(req.user.roles);
+    const alreadyMe = inquiry.assigned_user?.toLowerCase() === me.toLowerCase();
+    if (alreadyMe && !(skips && inquiry.status === STATUS.ROUTED)) {
+      res.json({ inquiry });
+      return;
+    }
+
+    let group = inquiry.assigned_group || '';
+    if (!group) {
+      if (!caps.canRoute) {
+        res.status(403).json({ error: 'רק מי שמנתב יכול לשייך פנייה שטרם נותבה' });
+        return;
+      }
+      if (caps.manageableGroups.length !== 1) {
+        res.status(400).json({ error: 'יש לבחור קבוצה לפני השיוך', needsGroup: true });
+        return;
+      }
+      group = caps.manageableGroups[0];
+    } else {
+      const inGroup = caps.groups.some((g) => groupsMatch(group, g));
+      const canManage = caps.manageableGroups.some((g) => groupsMatch(group, g));
+      if (!inGroup && !canManage) {
+        res.status(403).json({ error: 'אין לך הרשאה לשייך את הפנייה הזו אליך' });
+        return;
+      }
+      const taken = !!inquiry.assigned_user && !alreadyMe;
+      if (taken && !caps.canRoute) {
+        res.status(409).json({ error: 'הפנייה כבר משויכת למטפל אחר' });
+        return;
+      }
+    }
+
+    const updated = await routeInquiry(meta, req.params.id, {
+      group,
+      assignedUser: me,
+      assignedUserLabel: caps.displayName,
+      routedBy: me,
+      routeToManager: skips,
+    });
+    if (!updated) {
+      res.status(404).json({ error: 'הפנייה לא נמצאה' });
+      return;
     }
     res.json({ inquiry: updated });
   } catch (err) {
@@ -479,14 +577,9 @@ router.post('/:id/team-response', async (req, res, next) => {
     // Notify managers.
     void (async () => {
       try {
-        const envRoleKeys = (process.env.MANAGER_ROLE_KEYS || '')
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean);
         const managers = await listManagers({
           adminGroup: process.env.ADMIN_GROUP || 'tichnun',
-          // An empty array is truthy, so `|| DEFAULT` never fired — check length explicitly.
-          roleKeys: envRoleKeys.length ? envRoleKeys : DEFAULT_MANAGER_ROLE_KEYS,
+          roleKeys: managerRoleKeys(),
         });
         await Promise.all(
           managers.map((m) =>

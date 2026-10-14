@@ -62,7 +62,7 @@ function renderDetail(
         text: displayNames[String(value).toLowerCase()] || humanizeIdentifier(String(value)),
       };
     case 'route_to_manager':
-      return value ? { label: 'ניתוב', text: 'ישירות למנהל' } : null;
+      return value ? { label: 'ניתוב', text: 'דילוג על תגובת הגורם המטפל' } : null;
     case 'justification': {
       const meta = JUSTIFICATION_META[String(value) as JustificationDecision];
       return { label: 'החלטה', text: meta ? meta.label : String(value) };

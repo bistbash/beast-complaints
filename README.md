@@ -89,7 +89,7 @@ db-smart מסנכרן את העמודות הללו אוטומטית — אל **�
 | `priority`              | text        | `'medium'`          |
 | `created_at`            | timestamptz | `NOW()` (מעודכן בסטארטאפ לפי `timestamp` הצורני) |
 | `last_activity_at`      | timestamptz | `NOW()`             |
-| `due_at`                | timestamptz | `NOW() + 72h`       |
+| `due_at`                | timestamptz | `NOW() + 7 ימים`    |
 | `routed_at` / `routed_by` / `assigned_group` / `assigned_user` | | מתעדכן בעת ניתוב |
 | `team_response` / `team_response_at` / `team_response_by`     | | מתעדכן ע"י חבר הצוות  |
 | `manager_response` / `manager_response_at` / `manager_response_by` | | מתעדכן ע"י המנהל     |

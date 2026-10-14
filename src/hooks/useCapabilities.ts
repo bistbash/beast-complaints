@@ -5,6 +5,7 @@ export interface Capabilities {
   isAdmin: boolean;
   isNavigator: boolean;
   isManager: boolean;
+  skipsTeamResponse: boolean;
   isKeva: boolean;
   groups: string[];
   manageableGroups: string[];

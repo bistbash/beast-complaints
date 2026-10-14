@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import axios from 'axios';
 import type { BeastUser, UserCapabilities } from '../lib/types.ts';
-import { DEFAULT_KEVA_GROUP, DEFAULT_MANAGER_ROLE_KEYS, DEFAULT_TARGET_GROUPS } from '../lib/constants.ts';
+import { DEFAULT_KEVA_GROUP, DEFAULT_TARGET_GROUPS, hasManagerRole } from '../lib/constants.ts';
 import { configKeysForUserGroups } from '../lib/groupKeys.ts';
 import { humanizeIdentifier } from '../lib/humanize.ts';
 
@@ -72,12 +72,6 @@ function navigatorRoleKey(): string {
   return normalize(process.env.NAVIGATOR_ROLE_KEY || 'naat_pniot_lakoach');
 }
 
-function managerRoleKeys(): string[] {
-  const env = (process.env.MANAGER_ROLE_KEYS || '').trim();
-  const list = env ? env.split(',').map(normalize).filter(Boolean) : DEFAULT_MANAGER_ROLE_KEYS;
-  return list.length ? list : DEFAULT_MANAGER_ROLE_KEYS;
-}
-
 function kevaGroupName(): string {
   return normalize(process.env.KEVA_GROUP || DEFAULT_KEVA_GROUP);
 }
@@ -114,9 +108,7 @@ export function isNavigator(user: BeastUser): boolean {
 
 export function isManager(user: BeastUser): boolean {
   if (isAdmin(user)) return true;
-  const wanted = managerRoleKeys();
-  const roles = (user.roles || []).map((r) => normalize(r?.key || ''));
-  return roles.some((r) => wanted.includes(r));
+  return hasManagerRole(user.roles);
 }
 
 export function isKeva(user: BeastUser): boolean {
@@ -154,6 +146,8 @@ export function buildCapabilities(user: BeastUser): UserCapabilities {
     isAdmin: admin,
     isNavigator: navigator,
     isManager: manager,
+    /** Assignee with this flag skips the handling-party response and closes via email. */
+    skipsTeamResponse: hasManagerRole(user.roles),
     isKeva: keva,
     groups: effectiveGroups,
     manageableGroups: manageable,

@@ -652,6 +652,15 @@ html, body {
   transition: background-color 200ms ease, box-shadow 200ms ease;
 }
 .pipe-seg[data-state='done'] { background: rgb(var(--stage) / 1); }
+.pipe-seg[data-state='skipped'] {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgb(var(--stage) / 0.18),
+    rgb(var(--stage) / 0.18) 3px,
+    rgb(var(--stage) / 0.45) 3px,
+    rgb(var(--stage) / 0.45) 6px
+  );
+}
 .pipe-seg[data-state='current'] {
   background: rgb(var(--stage) / 1);
   box-shadow: 0 0 0 3px rgb(var(--stage) / 0.18);
@@ -718,9 +727,16 @@ html, body {
   color: rgb(var(--stage) / 1);
   box-shadow: 0 0 0 5px rgb(var(--stage) / 0.16);
 }
+.stepper-node[data-state='skipped'] .stepper-dot {
+  border-style: dashed;
+  border-color: rgb(var(--stage) / 0.75);
+  background: rgb(var(--stage-soft) / 1);
+  color: rgb(var(--muted));
+}
 .stepper-label { margin-top: 0.55rem; font-size: 0.8rem; font-weight: 600; color: rgb(var(--text-secondary)); }
 .stepper-node[data-state='done'] .stepper-label,
 .stepper-node[data-state='current'] .stepper-label { color: rgb(var(--text)); }
+.stepper-node[data-state='skipped'] .stepper-label { color: rgb(var(--muted)); }
 .stepper-actor { margin-top: 0.15rem; font-size: 0.7rem; color: rgb(var(--muted)); line-height: 1.3; }
 @media (max-width: 640px) {
   .stepper-actor { display: none; }
@@ -786,6 +802,259 @@ html, body {
 .dash-bar-fill { height: 100%; border-radius: 999px; transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1); }
 
 .legend-dot { width: 0.6rem; height: 0.6rem; border-radius: 3px; flex-shrink: 0; }
+
+/* ----------------------------------------------------------------
+ * Stats dashboard — hero header, range toggle, refresh button
+ * --------------------------------------------------------------- */
+.stats-hero {
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgb(var(--border) / 1);
+  background:
+    radial-gradient(1200px 300px at 90% -20%, rgb(99 102 241 / 0.14), transparent 60%),
+    linear-gradient(to left, rgb(238 242 255 / 0.7), rgb(var(--surface) / 1) 55%);
+  padding: 1.15rem 1.35rem;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 20px 40px -32px rgb(15 23 42 / 0.16);
+}
+.dark .stats-hero {
+  background:
+    radial-gradient(1200px 300px at 90% -20%, rgb(99 102 241 / 0.22), transparent 60%),
+    linear-gradient(to left, rgb(49 46 129 / 0.28), rgb(var(--surface) / 1) 55%);
+}
+.stats-hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.stats-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.stats-hero-pipeline {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgb(var(--border) / 0.7);
+}
+
+.range-toggle {
+  display: inline-flex;
+  padding: 0.25rem;
+  gap: 0.15rem;
+  background: rgb(var(--surface-sunken) / 1);
+  border: 1px solid rgb(var(--border) / 0.8);
+  border-radius: 12px;
+}
+.range-toggle-btn {
+  border: none;
+  background: transparent;
+  color: rgb(var(--muted));
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+.range-toggle-btn:hover { color: rgb(var(--text)); }
+.range-toggle-btn[data-active='true'] {
+  background: rgb(var(--surface) / 1);
+  color: rgb(var(--text));
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08), 0 4px 12px -6px rgb(15 23 42 / 0.14);
+}
+
+.btn-ghost-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--border) / 1);
+  background: rgb(var(--surface) / 1);
+  color: rgb(var(--muted));
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+.btn-ghost-icon:hover { color: rgb(var(--text)); border-color: rgb(var(--border-strong) / 1); }
+.btn-ghost-icon:disabled { cursor: not-allowed; opacity: 0.6; }
+@keyframes refreshSpin { to { transform: rotate(-360deg); } }
+.refresh-spin { animation: refreshSpin 900ms linear infinite; transform-origin: 50% 50%; }
+@media (prefers-reduced-motion: reduce) { .refresh-spin { animation: none; } }
+
+/* KPI cards & sparkline slot */
+.kpi-card {
+  min-height: 116px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.stat-spark-inline { flex-shrink: 0; opacity: 0.85; margin-bottom: 0.15rem; }
+
+/* Delta pill (used inside KPI cards and next to SLA gauge) */
+.delta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(var(--surface-sunken) / 1);
+  color: rgb(var(--muted));
+  border: 1px solid rgb(var(--border) / 0.85);
+  line-height: 1;
+  white-space: nowrap;
+}
+.delta-arrow { font-weight: 900; }
+.delta-pill[data-tone='good'] {
+  background: rgb(209 250 229 / 1);
+  color: rgb(6 95 70 / 1);
+  border-color: rgb(167 243 208 / 1);
+}
+.delta-pill[data-tone='bad'] {
+  background: rgb(254 226 226 / 1);
+  color: rgb(153 27 27 / 1);
+  border-color: rgb(254 202 202 / 1);
+}
+.delta-pill[data-tone='accent'] {
+  background: rgb(224 231 255 / 1);
+  color: rgb(55 48 163 / 1);
+  border-color: rgb(199 210 254 / 1);
+}
+.dark .delta-pill[data-tone='good'] {
+  background: rgb(6 78 59 / 0.6);
+  color: rgb(167 243 208 / 1);
+  border-color: rgb(6 95 70 / 0.6);
+}
+.dark .delta-pill[data-tone='bad'] {
+  background: rgb(127 29 29 / 0.55);
+  color: rgb(254 202 202 / 1);
+  border-color: rgb(153 27 27 / 0.6);
+}
+.dark .delta-pill[data-tone='accent'] {
+  background: rgb(55 48 163 / 0.5);
+  color: rgb(199 210 254 / 1);
+  border-color: rgb(67 56 202 / 0.6);
+}
+
+/* Stacked bar (used for backlog age + justification split) */
+.stacked-bar-track {
+  position: relative;
+  width: 100%;
+  border-radius: 999px;
+  background: rgb(var(--surface-sunken) / 1);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgb(var(--border) / 0.6);
+}
+.stacked-bar-seg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  height: 100%;
+  min-width: 4px;
+  transition: width 500ms cubic-bezier(0.22, 1, 0.36, 1), filter 150ms ease;
+}
+.stacked-bar-seg:hover { filter: brightness(1.08); }
+.dark .stacked-bar-seg { color: rgb(var(--surface) / 1); }
+.stacked-bar-num {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding-inline: 0.25rem;
+}
+.stacked-bar-empty {
+  color: rgb(var(--muted));
+  font-size: 0.75rem;
+  padding-inline: 0.75rem;
+}
+
+/* Gauge (SLA compliance) */
+.gauge-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Backlog age legend chips */
+.backlog-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: 10px;
+  background: rgb(var(--surface-sunken) / 1);
+  border: 1px solid rgb(var(--border) / 0.6);
+}
+
+/* Reopened badge & callout */
+.reopened-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: rgb(var(--accent) / 0.15);
+  color: rgb(var(--accent) / 1);
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+/* Top reporters list */
+.top-reporter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--border) / 0.7);
+  background: rgb(var(--surface) / 1);
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.top-reporter-row:hover {
+  background: rgb(var(--surface-sunken) / 0.7);
+  border-color: rgb(var(--border-strong) / 1);
+}
+.top-reporter-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgb(var(--surface-sunken) / 1);
+  color: rgb(var(--muted));
+  font-weight: 800;
+  font-size: 0.78rem;
+  flex-shrink: 0;
+}
+.top-reporter-row:nth-child(1) .top-reporter-rank {
+  background: rgb(254 243 199 / 1);
+  color: rgb(146 64 14 / 1);
+}
+.dark .top-reporter-row:nth-child(1) .top-reporter-rank {
+  background: rgb(69 26 3 / 0.6);
+  color: rgb(253 224 71 / 1);
+}
+.top-reporter-open {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(254 249 195 / 1);
+  color: rgb(120 53 15 / 1);
+  font-weight: 700;
+}
+.dark .top-reporter-open {
+  background: rgb(69 26 3 / 0.55);
+  color: rgb(253 224 71 / 1);
+}
 
 /* ----------------------------------------------------------------
  * Utility colors / helpers

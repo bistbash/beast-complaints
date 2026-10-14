@@ -159,7 +159,7 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
       ALTER COLUMN priority              SET DEFAULT 'medium',
       ALTER COLUMN created_at            SET DEFAULT NOW(),
       ALTER COLUMN last_activity_at      SET DEFAULT NOW(),
-      ALTER COLUMN due_at                SET DEFAULT (NOW() + INTERVAL '72 hours')
+      ALTER COLUMN due_at                SET DEFAULT (NOW() + INTERVAL '7 days')
   `);
 
   // Backfill sheet-synced rows that arrived before defaults were in place.
@@ -177,7 +177,7 @@ export async function ensureInquiryWorkflowColumns(pool: Pool, tableName: string
              END
            ),
            last_activity_at = COALESCE(last_activity_at, NOW()),
-           due_at = COALESCE(due_at, NOW() + INTERVAL '72 hours')
+           due_at = COALESCE(due_at, NOW() + INTERVAL '7 days')
      WHERE inquiry_id IS NULL
         OR status IS NULL
         OR priority IS NULL

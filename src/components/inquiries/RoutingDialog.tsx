@@ -12,10 +12,10 @@ interface RoutingDialogProps {
   inquiryId: string;
   currentGroup?: string | null;
   capabilities: Capabilities | null;
+  /** When opened from "שייך אליי" on an unrouted inquiry, pre-select the current user. */
+  prefillSelf?: boolean;
   onRouted: () => void;
 }
-
-type Mode = 'team' | 'manager';
 
 export default function RoutingDialog({
   open,
@@ -23,18 +23,17 @@ export default function RoutingDialog({
   inquiryId,
   currentGroup,
   capabilities,
+  prefillSelf = false,
   onRouted,
 }: RoutingDialogProps) {
-  const [mode, setMode] = useState<Mode>('team');
   const [group, setGroup] = useState(currentGroup || '');
   const [members, setMembers] = useState<UserSearchOption[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersWarning, setMembersWarning] = useState<string | null>(null);
-  const [managers, setManagers] = useState<UserSearchOption[]>([]);
-  const [managersLoading, setManagersLoading] = useState(false);
   const [assignedUser, setAssignedUser] = useState('');
   const [assignedUserDisplayName, setAssignedUserDisplayName] = useState('');
   const [assignedUserAvatarUrl, setAssignedUserAvatarUrl] = useState<string | null>(null);
+  const [assigneeSkips, setAssigneeSkips] = useState(false);
   const [groupQuery, setGroupQuery] = useState('');
   const [groupOpen, setGroupOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -42,16 +41,22 @@ export default function RoutingDialog({
   const groupRef = useRef<HTMLDivElement>(null);
 
   const allowedGroups = capabilities?.manageableGroups || [];
-  const canRouteToManager = !!(capabilities?.isAdmin || capabilities?.isNavigator);
 
   useEffect(() => {
     if (!open) return;
-    setMode('team');
-    setGroup(currentGroup || (allowedGroups.length === 1 ? allowedGroups[0] : ''));
-    setGroupQuery(currentGroup ? groupLabel(currentGroup) : allowedGroups.length === 1 ? groupLabel(allowedGroups[0]) : '');
-    clearAssignee();
+    const initialGroup = currentGroup || (allowedGroups.length === 1 ? allowedGroups[0] : '');
+    setGroup(initialGroup);
+    setGroupQuery(initialGroup ? groupLabel(initialGroup) : '');
     setError(null);
-  }, [open, currentGroup, allowedGroups]);
+    if (prefillSelf && capabilities) {
+      setAssignedUser(capabilities.email);
+      setAssignedUserDisplayName(capabilities.displayName);
+      setAssignedUserAvatarUrl(null);
+      setAssigneeSkips(!!capabilities.skipsTeamResponse);
+    } else {
+      clearAssignee();
+    }
+  }, [open, currentGroup, allowedGroups, prefillSelf, capabilities]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -62,16 +67,6 @@ export default function RoutingDialog({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  useEffect(() => {
-    if (mode !== 'manager') return;
-    setManagersLoading(true);
-    api
-      .get('/api/inquiries/lookup/managers')
-      .then((res) => setManagers(res.data?.managers || []))
-      .catch(() => setManagers([]))
-      .finally(() => setManagersLoading(false));
-  }, [mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,12 +90,13 @@ export default function RoutingDialog({
     return () => {
       cancelled = true;
     };
-  }, [group, mode]);
+  }, [group]);
 
   function clearAssignee() {
     setAssignedUser('');
     setAssignedUserDisplayName('');
     setAssignedUserAvatarUrl(null);
+    setAssigneeSkips(false);
   }
 
   function normalizeText(value: string): string {
@@ -140,35 +136,62 @@ export default function RoutingDialog({
     setAssignedUser(user.identity);
     setAssignedUserDisplayName(user.displayName);
     setAssignedUserAvatarUrl(user.avatarUrl);
+    if (!user.identity) setAssigneeSkips(false);
     if (!group && user.suggestedGroup) {
       setGroup(user.suggestedGroup);
       setGroupQuery(groupLabel(user.suggestedGroup));
     }
   }
 
+  useEffect(() => {
+    if (!assignedUser) {
+      setAssigneeSkips(false);
+      return;
+    }
+    if (capabilities && assignedUser.toLowerCase() === capabilities.email.toLowerCase()) {
+      setAssigneeSkips(!!capabilities.skipsTeamResponse);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get('/api/inquiries/lookup/assignee-role', { params: { user: assignedUser } })
+      .then((res) => {
+        if (!cancelled) setAssigneeSkips(!!res.data?.skipsTeamResponse);
+      })
+      .catch(() => {
+        if (!cancelled) setAssigneeSkips(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assignedUser, capabilities]);
+
+  function assignToSelf() {
+    if (!capabilities) return;
+    if (!group && capabilities.manageableGroups.length === 1) {
+      const key = capabilities.manageableGroups[0];
+      setGroup(key);
+      setGroupQuery(groupLabel(key));
+    }
+    setAssignedUser(capabilities.email);
+    setAssignedUserDisplayName(capabilities.displayName);
+    setAssignedUserAvatarUrl(null);
+    setAssigneeSkips(!!capabilities.skipsTeamResponse);
+    setError(null);
+  }
+
   async function submit() {
     setError(null);
     setSubmitting(true);
     try {
-      if (mode === 'manager') {
-        if (!assignedUser) {
-          setError('בחר מנהל');
-          return;
-        }
-        await api.post(`/api/inquiries/${inquiryId}/route`, {
-          assignedUser,
-          routeToManager: true,
-        });
-      } else {
-        if (!group && !assignedUser) {
-          setError('יש לבחור קבוצה או חבר צוות');
-          return;
-        }
-        await api.post(`/api/inquiries/${inquiryId}/route`, {
-          group: group || undefined,
-          assignedUser: assignedUser || null,
-        });
+      if (!group && !assignedUser) {
+        setError('יש לבחור קבוצה או חבר צוות');
+        return;
       }
+      await api.post(`/api/inquiries/${inquiryId}/route`, {
+        group: group || undefined,
+        assignedUser: assignedUser || null,
+      });
       onRouted();
       onClose();
     } catch (err: unknown) {
@@ -197,109 +220,81 @@ export default function RoutingDialog({
       }
     >
       <div className="space-y-4">
-        {canRouteToManager && (
-          <div className="flex gap-1 rounded-lg border border-subtle bg-surface-elevated p-1">
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                mode === 'team' ? 'bg-surface shadow-sm' : 'text-neutral-500'
-              }`}
-              onClick={() => setMode('team')}
-            >
-              ניתוב לצוות
-            </button>
-            <button
-              type="button"
-              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                mode === 'manager' ? 'bg-surface shadow-sm' : 'text-neutral-500'
-              }`}
-              onClick={() => setMode('manager')}
-            >
-              ישירות למנהל
-            </button>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-subtle bg-surface-elevated px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium">שיוך לעצמי</p>
+            <p className="muted text-xs">הפנייה תשויך אליך כגורם המטפל.</p>
           </div>
-        )}
+          <Button type="button" variant="ghost" size="sm" onClick={assignToSelf} disabled={!capabilities || submitting}>
+            שייך אליי
+          </Button>
+        </div>
 
-        {mode === 'team' && (
-          <>
-            <div ref={groupRef} className="relative">
-              <label className="field-label">קבוצה יעד {capabilities?.isKeva && '(רק קבוצות שאתה חבר בהן)'}</label>
-              <input
-                className="input"
-                value={groupQuery}
-                onChange={(e) => onGroupInput(e.target.value)}
-                onFocus={() => setGroupOpen(true)}
-                placeholder="התחל להקליד קבוצה…"
-                autoComplete="off"
-              />
-              {groupOpen && filteredGroups.length > 0 && (
-                <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-subtle bg-surface shadow-elevated">
-                  {filteredGroups.map((g) => (
-                    <button
-                      key={g.key}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selectGroup(g.key)}
-                      className={`w-full px-3 py-2 text-right text-sm transition first:rounded-t-xl last:rounded-b-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/60 ${
-                        group === g.key ? 'bg-indigo-50 font-medium dark:bg-indigo-950/30' : ''
-                      }`}
-                    >
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {!allowedGroups.length && (
-                <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
-                  אין לך הרשאה לנתב לקבוצות. צור קשר עם המנהל.
-                </p>
-              )}
+        <div ref={groupRef} className="relative">
+          <label className="field-label">קבוצה יעד {capabilities?.isKeva && '(רק קבוצות שאתה חבר בהן)'}</label>
+          <input
+            className="input"
+            value={groupQuery}
+            onChange={(e) => onGroupInput(e.target.value)}
+            onFocus={() => setGroupOpen(true)}
+            placeholder="התחל להקליד קבוצה…"
+            autoComplete="off"
+          />
+          {groupOpen && filteredGroups.length > 0 && (
+            <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-subtle bg-surface shadow-elevated">
+              {filteredGroups.map((g) => (
+                <button
+                  key={g.key}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => selectGroup(g.key)}
+                  className={`w-full px-3 py-2 text-right text-sm transition first:rounded-t-xl last:rounded-b-xl hover:bg-neutral-50 dark:hover:bg-neutral-800/60 ${
+                    group === g.key ? 'bg-indigo-50 font-medium dark:bg-indigo-950/30' : ''
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
             </div>
+          )}
+          {!allowedGroups.length && (
+            <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">
+              אין לך הרשאה לנתב לקבוצות. צור קשר עם המנהל.
+            </p>
+          )}
+        </div>
 
-            <UserSearchInput
-              label="חבר צוות (אופציונלי)"
-              value={assignedUser}
-              displayName={assignedUserDisplayName}
-              avatarUrl={assignedUserAvatarUrl}
-              users={members}
-              loading={membersLoading}
-              placeholder={group ? 'חפש חבר צוות…' : 'חפש חבר צוות מכל הקבוצות…'}
-              onChange={onMemberChange}
-            />
-            {membersWarning ? (
-              <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                {membersWarning}
-              </p>
-            ) : members.length === 0 && !membersLoading ? (
-              <p className="muted text-xs">
-                {group ? 'לא נמצאו חברי צוות בקבוצה זו ב-AD.' : 'לא נמצאו משתמשים זמינים לניתוב.'}
-              </p>
-            ) : (
-              <p className="field-hint">
-                {group
-                  ? 'ללא שיוך — כל הצוות יראה את הפנייה. בחירת חבר ספציפי תשייך לטיפול אישי.'
-                  : 'אפשר לבחור משתמש גם בלי לבחור קבוצה — הקבוצה תיבחר אוטומטית לפי המשתמש שנבחר.'}
-              </p>
-            )}
-          </>
+        <UserSearchInput
+          label="חבר צוות (אופציונלי)"
+          value={assignedUser}
+          displayName={assignedUserDisplayName}
+          avatarUrl={assignedUserAvatarUrl}
+          users={members}
+          loading={membersLoading}
+          placeholder={group ? 'חפש חבר צוות…' : 'חפש חבר צוות מכל הקבוצות…'}
+          onChange={onMemberChange}
+        />
+        {membersWarning ? (
+          <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {membersWarning}
+          </p>
+        ) : members.length === 0 && !membersLoading ? (
+          <p className="muted text-xs">
+            {group ? 'לא נמצאו חברי צוות בקבוצה זו ב-AD.' : 'לא נמצאו משתמשים זמינים לניתוב.'}
+          </p>
+        ) : (
+          <p className="field-hint">
+            {group
+              ? 'ללא שיוך — כל הצוות יראה את הפנייה. בחירת חבר ספציפי תשייך לטיפול אישי.'
+              : 'אפשר לבחור משתמש גם בלי לבחור קבוצה — הקבוצה תיבחר אוטומטית לפי המשתמש שנבחר.'}
+          </p>
         )}
 
-        {mode === 'manager' && (
-          <>
-            <UserSearchInput
-              label="מנהל"
-              value={assignedUser}
-              displayName={assignedUserDisplayName}
-              avatarUrl={assignedUserAvatarUrl}
-              users={managers}
-              loading={managersLoading}
-              placeholder="חפש מנהל…"
-              onChange={onMemberChange}
-            />
-            <p className="field-hint">
-              הפנייה תועבר ישירות להחלטת המנהל ותדלג על שלב התייחסות הצוות.
-            </p>
-          </>
+        {assigneeSkips && (
+          <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            המטפל הוא מד״ר או מנהל בית הספר. הפנייה תדלג על תגובת הגורם המטפל ותעבור להתייחסות
+            הסופית — התגובה תסגור את הפנייה ותישלח לפונה במייל.
+          </p>
         )}
 
         {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}

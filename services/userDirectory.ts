@@ -20,8 +20,21 @@ interface DirectoryUser {
 let cache: { fetchedAt: number; users: DirectoryUser[] } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
+/** Platform roles are not on the AD directory payload — they live in Beast user_roles. */
+const roleCache = new Map<string, { fetchedAt: number; roles: string[] }>();
+const roleInflight = new Map<string, Promise<string[]>>();
+const ROLE_CACHE_TTL_MS = 5 * 60 * 1000;
+
 function portalUrl() {
   return process.env.BEAST_PORTAL_URL || 'http://localhost:3000';
+}
+
+function beastHeaders(): Record<string, string> | null {
+  const apiKey = process.env.BEAST_API_KEY;
+  if (!apiKey) return null;
+  const headers: Record<string, string> = { 'X-Api-Key': apiKey };
+  if (process.env.BEAST_SECRET_KEY) headers['X-Secret-Key'] = process.env.BEAST_SECRET_KEY;
+  return headers;
 }
 
 let warnedAboutMissingKey = false;
@@ -40,8 +53,8 @@ async function fetchDirectory(): Promise<DirectoryUser[]> {
     return [];
   }
   try {
-    const headers: Record<string, string> = { 'X-Api-Key': apiKey };
-    if (process.env.BEAST_SECRET_KEY) headers['X-Secret-Key'] = process.env.BEAST_SECRET_KEY;
+    const headers = beastHeaders();
+    if (!headers) return [];
     const { data } = await axios.get(`${portalUrl()}/api/app-permissions/directory/users`, {
       headers,
       timeout: 8000,
@@ -53,7 +66,9 @@ async function fetchDirectory(): Promise<DirectoryUser[]> {
           displayName: (u.display_name as string) || (u.displayName as string) || (u.name as string) || null,
           groups: Array.isArray(u.groups) ? (u.groups as string[]) : [],
           roles: Array.isArray(u.roles)
-            ? (u.roles as Array<Record<string, unknown>>).map((r) => String(r.key || r.role_key || ''))
+            ? (u.roles as Array<string | Record<string, unknown>>)
+                .map((r) => (typeof r === 'string' ? r : String(r.key || r.role_key || '')))
+                .filter(Boolean)
             : [],
         }))
       : [];
@@ -61,6 +76,69 @@ async function fetchDirectory(): Promise<DirectoryUser[]> {
   } catch (err) {
     console.warn('[beast-complaints] AD directory fetch failed:', err instanceof Error ? err.message : err);
     return [];
+  }
+}
+
+function roleKeysFromPayload(roles: unknown): string[] {
+  if (!Array.isArray(roles)) return [];
+  return roles
+    .map((r) => (typeof r === 'string' ? r : String((r as { key?: string; role_key?: string }).key || (r as { role_key?: string }).role_key || '')))
+    .map((r) => r.trim())
+    .filter(Boolean);
+}
+
+async function fetchRoleKeys(username: string): Promise<string[]> {
+  const key = username.trim().toLowerCase();
+  if (!key) return [];
+  const cached = roleCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < ROLE_CACHE_TTL_MS) return cached.roles;
+  const pending = roleInflight.get(key);
+  if (pending) return pending;
+
+  const job = (async () => {
+    const headers = beastHeaders();
+    if (!headers) return [];
+    try {
+      const { data } = await axios.get(
+        `${portalUrl()}/api/user-roles/app/users/${encodeURIComponent(key)}`,
+        { headers, timeout: 8000 },
+      );
+      const roles = roleKeysFromPayload(data?.user?.roles);
+      roleCache.set(key, { fetchedAt: Date.now(), roles });
+      return roles;
+    } catch (err) {
+      console.warn(
+        '[beast-complaints] role lookup failed for',
+        key,
+        err instanceof Error ? err.message : err,
+      );
+      return [];
+    } finally {
+      roleInflight.delete(key);
+    }
+  })();
+
+  roleInflight.set(key, job);
+  return job;
+}
+
+/** Fill `roles` from Beast for users the AD directory payload left blank. Cached for 5 minutes. */
+export async function ensureUserRoles(users: DirectoryUser[]): Promise<void> {
+  const pending = users.filter((u) => u.username && !(u.roles && u.roles.length));
+  const usernames = Array.from(new Set(pending.map((u) => u.username.trim().toLowerCase())));
+  const byName = new Map<string, string[]>();
+  const queue = [...usernames];
+  const workers = Array.from({ length: Math.min(8, queue.length) }, async () => {
+    while (queue.length) {
+      const name = queue.shift();
+      if (!name) return;
+      byName.set(name, await fetchRoleKeys(name));
+    }
+  });
+  await Promise.all(workers);
+  for (const user of pending) {
+    const roles = byName.get(user.username.trim().toLowerCase());
+    if (roles) user.roles = roles;
   }
 }
 
@@ -132,6 +210,9 @@ export async function listAllGroups(): Promise<string[]> {
  */
 export async function listManagers(opts: { adminGroup: string; roleKeys: string[] }): Promise<DirectoryUser[]> {
   const users = await getCachedDirectory();
+  // Roles are filled lazily (routing / member search). Users already resolved
+  // keep their roles on the cached directory object, so מד"ר / מנהל בית הספר
+  // who were looked up are included here together with the admin group.
   const admin = opts.adminGroup.toLowerCase();
   const roleSet = new Set(opts.roleKeys.map((r) => r.toLowerCase()));
   return users.filter((u) => {
@@ -172,14 +253,15 @@ export async function findUser(identifier: string): Promise<DirectoryUser | null
   const id = identifier.trim().toLowerCase();
   if (!id) return null;
   const users = await getCachedDirectory();
-  return (
+  const found =
     users.find(
       (u) =>
         u.email?.toLowerCase() === id ||
         u.username?.toLowerCase() === id ||
         `${u.username}@local`.toLowerCase() === id,
-    ) || null
-  );
+    ) || null;
+  if (found) await ensureUserRoles([found]);
+  return found;
 }
 
 /** Fetch Beast profile avatars in batches (requires user SSO token). */

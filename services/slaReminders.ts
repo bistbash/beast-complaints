@@ -4,7 +4,7 @@ import {
   STATUS,
   HISTORY_ACTION,
   STATUS_LABEL_HE,
-  DEFAULT_MANAGER_ROLE_KEYS,
+  managerRoleKeys,
   type InquiryStatus,
 } from '../lib/constants.ts';
 import type { DatasetMeta } from '../lib/types.ts';
@@ -30,14 +30,6 @@ interface BreachRow {
   status: InquiryStatus;
   assigned_user: string | null;
   assigned_group: string | null;
-}
-
-function managerRoleKeys(): string[] {
-  const env = (process.env.MANAGER_ROLE_KEYS || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return env.length ? env : DEFAULT_MANAGER_ROLE_KEYS;
 }
 
 /** Resolve the recipients (specific users and/or a group) for one breached inquiry. */
