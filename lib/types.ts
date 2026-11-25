@@ -109,7 +109,7 @@ export interface HistoryRow {
 export interface UserCapabilities {
   /** Member of ADMIN_GROUP (e.g. `tichnun`). Full system access. */
   isAdmin: boolean;
-  /** Platform role `naat_pniot_lakoach`. Routes inquiries. */
+  /** אחראי פניות לקוח: platform role `customer_inquiries_manager` (or legacy `naat_pniot_lakoach`). Sees and routes every inquiry. */
   isNavigator: boolean;
   /** Manager: ADMIN_GROUP **or** has any manager role (`madr`, `school_manager`, …). */
   isManager: boolean;

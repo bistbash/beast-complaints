@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import axios from 'axios';
 import type { BeastUser, UserCapabilities } from '../lib/types.ts';
-import { DEFAULT_KEVA_GROUP, DEFAULT_TARGET_GROUPS, hasManagerRole } from '../lib/constants.ts';
+import { DEFAULT_KEVA_GROUP, DEFAULT_TARGET_GROUPS, hasManagerRole, navigatorRoleKeys } from '../lib/constants.ts';
 import { configKeysForUserGroups } from '../lib/groupKeys.ts';
 import { humanizeIdentifier } from '../lib/humanize.ts';
 
@@ -68,10 +68,6 @@ function adminGroupName(): string {
   return normalize(process.env.ADMIN_GROUP || 'tichnun');
 }
 
-function navigatorRoleKey(): string {
-  return normalize(process.env.NAVIGATOR_ROLE_KEY || 'naat_pniot_lakoach');
-}
-
 function kevaGroupName(): string {
   return normalize(process.env.KEVA_GROUP || DEFAULT_KEVA_GROUP);
 }
@@ -99,11 +95,11 @@ export function isAdmin(user: BeastUser): boolean {
 }
 
 export function isNavigator(user: BeastUser): boolean {
-  const key = navigatorRoleKey();
+  const keys = navigatorRoleKeys();
   const roles = (user.roles || []).map((r) => normalize(r?.key || ''));
-  if (roles.includes(key)) return true;
+  if (roles.some((r) => keys.includes(r))) return true;
   // Defensive fallback: accept an identically-named AD group.
-  return (user.groups || []).map(normalize).includes(key);
+  return (user.groups || []).map(normalize).some((g) => keys.includes(g));
 }
 
 export function isManager(user: BeastUser): boolean {
@@ -180,7 +176,7 @@ export const requireRouter: RequestHandler = (req, res, next) => {
     return;
   }
   if (!isNavigator(req.user) && !isAdmin(req.user) && !isKeva(req.user)) {
-    res.status(403).json({ error: 'נדרשת הרשאת נע"ט / מנהל / קבע' });
+    res.status(403).json({ error: 'נדרשת הרשאת אחראי פניות לקוח / מנהל / קבע' });
     return;
   }
   next();

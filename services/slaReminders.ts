@@ -5,6 +5,7 @@ import {
   HISTORY_ACTION,
   STATUS_LABEL_HE,
   managerRoleKeys,
+  navigatorRoleKeys,
   type InquiryStatus,
 } from '../lib/constants.ts';
 import type { DatasetMeta } from '../lib/types.ts';
@@ -49,7 +50,7 @@ async function resolveRecipients(row: BreachRow): Promise<{ users: string[]; gro
   // status === NEW (still unrouted) → alert whoever can route it.
   const navigators = await listNavigators({
     adminGroup,
-    navigatorRoleKey: process.env.NAVIGATOR_ROLE_KEY || 'naat_pniot_lakoach',
+    navigatorRoleKeys: navigatorRoleKeys(),
     kevaGroup: process.env.KEVA_GROUP || 'keva',
   });
   return { users: navigators.map((m) => m.email || `${m.username}@local`), group: null };

@@ -230,18 +230,18 @@ export async function listManagers(opts: { adminGroup: string; roleKeys: string[
  */
 export async function listNavigators(opts: {
   adminGroup: string;
-  navigatorRoleKey: string;
+  navigatorRoleKeys: string[];
   kevaGroup: string;
 }): Promise<DirectoryUser[]> {
   const users = await getCachedDirectory();
   const admin = opts.adminGroup.toLowerCase();
-  const navKey = opts.navigatorRoleKey.toLowerCase();
+  const navKeys = new Set(opts.navigatorRoleKeys.map((k) => k.toLowerCase()));
   const keva = opts.kevaGroup.toLowerCase();
   return users.filter((u) => {
     const groups = u.groups.map((g) => g.toLowerCase());
     if (groups.includes(admin) || groups.includes(keva)) return true;
     const roles = (u.roles || []).map((r) => r.toLowerCase());
-    return roles.includes(navKey);
+    return roles.some((r) => navKeys.has(r));
   });
 }
 

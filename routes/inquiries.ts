@@ -370,7 +370,7 @@ router.post('/:id/route', async (req, res, next) => {
     }
     const caps = buildCapabilities(req.user);
     if (!caps.canRoute) {
-      res.status(403).json({ error: 'נדרשת הרשאת נע"ט / מנהל / קבע' });
+      res.status(403).json({ error: 'נדרשת הרשאת אחראי פניות לקוח / מנהל / קבע' });
       return;
     }
     const meta = await requireDataset();
@@ -560,7 +560,7 @@ router.post('/:id/team-response', async (req, res, next) => {
     // Allowed: assigned user, keva, admin, navigator.
     const isAssignee = inquiry.assigned_user?.toLowerCase() === caps.email.toLowerCase();
     if (!isAssignee && !caps.isKeva && !caps.isAdmin && !caps.isNavigator) {
-      res.status(403).json({ error: 'רק המטפל המשויך / קבע / נע"ט / מנהל יכולים לכתוב התייחסות צוות' });
+      res.status(403).json({ error: 'רק המטפל המשויך / קבע / אחראי פניות לקוח / מנהל יכולים לכתוב התייחסות צוות' });
       return;
     }
     if (inquiry.status !== STATUS.ROUTED) {

@@ -142,6 +142,22 @@ export function managerRoleKeys(): string[] {
   return Array.from(new Set([...DEFAULT_MANAGER_ROLE_KEYS, ...fromEnv]));
 }
 
+/**
+ * Beast role keys for אחראי פניות לקוח — sees and routes every inquiry, without
+ * the admin settings. `customer_inquiries_manager` is the Beast role;
+ * `naat_pniot_lakoach` is the older key, kept so existing holders keep access.
+ * NAVIGATOR_ROLE_KEY (comma-separated) may add more keys; these are always included.
+ */
+export const DEFAULT_NAVIGATOR_ROLE_KEYS = ['customer_inquiries_manager', 'naat_pniot_lakoach'];
+
+export function navigatorRoleKeys(): string[] {
+  const fromEnv = (process.env.NAVIGATOR_ROLE_KEY || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set([...DEFAULT_NAVIGATOR_ROLE_KEYS, ...fromEnv]));
+}
+
 export function hasManagerRole(
   roles: Array<string | { key?: string | null } | null | undefined> | null | undefined,
 ): boolean {

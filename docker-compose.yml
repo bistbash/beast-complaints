@@ -26,5 +26,5 @@ services:
       # Inquiry dataset + permissions
       - COMPLAINTS_DATASET_ID=${COMPLAINTS_DATASET_ID}
       - ADMIN_GROUP=${ADMIN_GROUP:-tichnun}
-      - NAVIGATOR_ROLE_KEY=${NAVIGATOR_ROLE_KEY:-naat_pniot_lakoach}
+      - NAVIGATOR_ROLE_KEY=${NAVIGATOR_ROLE_KEY:-customer_inquiries_manager}
       - TARGET_GROUPS=${TARGET_GROUPS:-}

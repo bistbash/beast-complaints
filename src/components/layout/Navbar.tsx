@@ -122,7 +122,7 @@ export default function Navbar({ user, capabilities, onLogout }: NavbarProps) {
                     )}
                     {capabilities.isNavigator && (
                       <span className="pill bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900">
-                        נע"ט פניות לקוח
+                        אחראי פניות לקוח
                       </span>
                     )}
                     {capabilities.isKeva && (
